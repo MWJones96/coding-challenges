@@ -7,16 +7,16 @@ use std::process::Command;
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short = 'c', value_name = "FILE", help = "Get number of bytes in file")]
-    filename_bytes: Option<String>,
+    filename_bytes: Vec<String>,
 
     #[arg(short = 'l', value_name = "FILE", help = "Get number of lines in file")]
-    filename_lines: Option<String>,
+    filename_lines: Vec<String>,
 }
 
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
-    if let Some(filename_bytes) = args.filename_bytes {
+    for filename_bytes in args.filename_bytes {
         // 1. Open the file
         let mut file = File::open(&filename_bytes)?;
         // 2. Prepare a buffer (String)
@@ -24,10 +24,10 @@ fn main() -> std::io::Result<()> {
         // 3. Read into the buffer
         file.read_to_string(&mut contents)?;
         let contents = contents.as_bytes().to_vec();
-        println!("  {} {}", get_num_bytes(&contents), &filename_bytes);
+        println!("{:8} {}", get_num_bytes(&contents), &filename_bytes);
     }
 
-    if let Some(filename_lines) = args.filename_lines {
+    for filename_lines in args.filename_lines {
         // 1. Open the file
         let mut file = File::open(&filename_lines)?;
         // 2. Prepare a buffer (String)
@@ -35,7 +35,7 @@ fn main() -> std::io::Result<()> {
         // 3. Read into the buffer
         file.read_to_string(&mut contents)?;
         let contents = contents.as_bytes().to_vec();
-        println!("    {} {}", get_num_lines(&contents), &filename_lines);
+        println!("{:8} {}", get_num_lines(&contents), &filename_lines);
     }
 
     Ok(())
@@ -87,7 +87,7 @@ fn test_output_num_bytes_test2() {
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("  1 test2.txt\n", stdout);
+    assert_eq!("       1 test2.txt\n", stdout);
 }
 
 #[test]
@@ -109,5 +109,5 @@ fn test_output_num_lines_test2() {
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("    0 test2.txt\n", stdout);
+    assert_eq!("       0 test2.txt\n", stdout);
 }
