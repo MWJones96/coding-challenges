@@ -7,50 +7,50 @@ use std::process::Command;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short = 'c', value_name = "FILE", help = "Get number of bytes in file")]
-    filename_bytes: Vec<String>,
+    /// Count bytes
+    #[arg(short = 'c', long)]
+    bytes: bool,
 
-    #[arg(short = 'l', value_name = "FILE", help = "Get number of lines in file")]
-    filename_lines: Vec<String>,
+    /// Count lines
+    #[arg(short = 'l', long)]
+    lines: bool,
 
-    #[arg(short = 'w', value_name = "FILE", help = "Get number of words in file")]
-    filename_words: Vec<String>,
+    /// Count words
+    #[arg(short = 'w', long)]
+    words: bool,
+
+    /// Count locale chars
+    #[arg(short = 'm', long)]
+    chars: bool,
+
+    /// The files to process
+    #[arg(value_name = "FILES")]
+    files: Vec<String>,
 }
 
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
-    for filename_bytes in args.filename_bytes {
+    for filename in args.files {
         // 1. Open the file
-        let mut file = File::open(&filename_bytes)?;
+        let mut file = File::open(&filename)?;
         // 2. Prepare a buffer (String)
         let mut contents = String::new();
         // 3. Read into the buffer
         file.read_to_string(&mut contents)?;
         let contents = contents.as_bytes().to_vec();
-        println!("{:8} {}", get_num_bytes(&contents), &filename_bytes);
-    }
-
-    for filename_lines in args.filename_lines {
-        // 1. Open the file
-        let mut file = File::open(&filename_lines)?;
-        // 2. Prepare a buffer (String)
-        let mut contents = String::new();
-        // 3. Read into the buffer
-        file.read_to_string(&mut contents)?;
-        let contents = contents.as_bytes().to_vec();
-        println!("{:8} {}", get_num_lines(&contents), &filename_lines);
-    }
-
-    for filename_words in args.filename_words {
-        // 1. Open the file
-        let mut file = File::open(&filename_words)?;
-        // 2. Prepare a buffer (String)
-        let mut contents = String::new();
-        // 3. Read into the buffer
-        file.read_to_string(&mut contents)?;
-        let contents = contents.as_bytes().to_vec();
-        println!("{:8} {}", get_num_words(&contents), &filename_words);
+        if args.bytes {
+            println!("{:8} {}", get_num_bytes(&contents), &filename);
+        }
+        if args.lines {
+            println!("{:8} {}", get_num_lines(&contents), &filename);
+        }
+        if args.words {
+            println!("{:8} {}", get_num_words(&contents), &filename);
+        }
+        if args.chars {
+            println!("{:8} {}", get_num_chars_locale(&contents), &filename);
+        }
     }
 
     Ok(())
@@ -79,6 +79,11 @@ fn get_num_words(bytes: &Vec<u8>) -> usize {
     matches.len()
 }
 
+fn get_num_chars_locale(bytes: &Vec<u8>) -> usize {
+    let text = str::from_utf8(bytes).expect("Invalid UTF8");
+    text.chars().count()
+}
+
 #[test]
 fn test_num_bytes() {
     let input = include_bytes!("../test.txt");
@@ -95,6 +100,12 @@ fn test_num_lines() {
 fn test_num_words() {
     let input = include_bytes!("../test.txt");
     assert_eq!(58_164, get_num_words(&input.to_vec()));
+}
+
+#[test]
+fn test_num_chars_locale() {
+    let input = include_bytes!("../test.txt");
+    assert_eq!(339_292, get_num_chars_locale(&input.to_vec()));
 }
 
 #[test]
@@ -161,4 +172,15 @@ fn test_output_num_words_test2() {
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
     assert_eq!("       1 test2.txt\n", stdout);
+}
+
+#[test]
+fn test_output_num_chars_locale() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-m", "test.txt"])
+        .output()
+        .expect("Failed to execute");
+
+    let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
+    assert_eq!("  339292 test.txt\n", stdout);
 }
