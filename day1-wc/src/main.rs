@@ -1,4 +1,5 @@
 use clap::Parser;
+use regex::Regex;
 use std::fs::File;
 use std::io::Read;
 use std::process::Command;
@@ -11,6 +12,9 @@ struct Args {
 
     #[arg(short = 'l', value_name = "FILE", help = "Get number of lines in file")]
     filename_lines: Vec<String>,
+
+    #[arg(short = 'w', value_name = "FILE", help = "Get number of words in file")]
+    filename_words: Vec<String>,
 }
 
 fn main() -> std::io::Result<()> {
@@ -38,6 +42,17 @@ fn main() -> std::io::Result<()> {
         println!("{:8} {}", get_num_lines(&contents), &filename_lines);
     }
 
+    for filename_words in args.filename_words {
+        // 1. Open the file
+        let mut file = File::open(&filename_words)?;
+        // 2. Prepare a buffer (String)
+        let mut contents = String::new();
+        // 3. Read into the buffer
+        file.read_to_string(&mut contents)?;
+        let contents = contents.as_bytes().to_vec();
+        println!("{:8} {}", get_num_words(&contents), &filename_words);
+    }
+
     Ok(())
 }
 
@@ -56,6 +71,14 @@ fn get_num_lines(bytes: &Vec<u8>) -> usize {
     return count;
 }
 
+fn get_num_words(bytes: &Vec<u8>) -> usize {
+    let re = Regex::new(r"\S+").unwrap();
+    let text = str::from_utf8(bytes).expect("Invalid UTF8");
+    let matches: Vec<_> = re.find_iter(text).into_iter().collect();
+
+    matches.len()
+}
+
 #[test]
 fn test_num_bytes() {
     let input = include_bytes!("../test.txt");
@@ -66,6 +89,12 @@ fn test_num_bytes() {
 fn test_num_lines() {
     let input = include_bytes!("../test.txt");
     assert_eq!(7_145, get_num_lines(&input.to_vec()));
+}
+
+#[test]
+fn test_num_words() {
+    let input = include_bytes!("../test.txt");
+    assert_eq!(58_164, get_num_words(&input.to_vec()));
 }
 
 #[test]
@@ -110,4 +139,26 @@ fn test_output_num_lines_test2() {
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
     assert_eq!("       0 test2.txt\n", stdout);
+}
+
+#[test]
+fn test_output_num_words() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-w", "test.txt"])
+        .output()
+        .expect("Failed to execute");
+
+    let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
+    assert_eq!("   58164 test.txt\n", stdout);
+}
+
+#[test]
+fn test_output_num_words_test2() {
+    let output = Command::new("cargo")
+        .args(["run", "--", "-w", "test2.txt"])
+        .output()
+        .expect("Failed to execute");
+
+    let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
+    assert_eq!("       1 test2.txt\n", stdout);
 }
