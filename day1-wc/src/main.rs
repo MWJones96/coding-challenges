@@ -1,8 +1,9 @@
+#![allow(unused)] // Silences all unused warnings for the whole project
 use clap::Parser;
 use regex::Regex;
 use std::fs::File;
-use std::io::Read;
-use std::process::Command;
+use std::io::{self, Read};
+use std::process::{Command, Stdio};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -31,6 +32,35 @@ struct Args {
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
     let has_option = args.bytes || args.lines || args.words || args.chars;
+
+    if args.files.is_empty() {
+        let mut contents = Vec::new();
+        io::stdin()
+            .read_to_end(&mut contents)
+            .expect("Failed to read stdin");
+
+        if has_option {
+            if args.bytes {
+                println!("{:8}", get_num_bytes(&contents));
+            }
+            if args.lines {
+                println!("{:8}", get_num_lines(&contents));
+            }
+            if args.words {
+                println!("{:8}", get_num_words(&contents));
+            }
+            if args.chars {
+                println!("{:8}", get_num_chars_locale(&contents));
+            }
+        } else {
+            println!(
+                "{:8}{:8}{:8}",
+                get_num_lines(&contents),
+                get_num_words(&contents),
+                get_num_bytes(&contents),
+            )
+        }
+    }
 
     for filename in args.files {
         // 1. Open the file
@@ -228,4 +258,50 @@ fn test_output_no_options_test2() {
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
     assert_eq!("       0       1       1 test2.txt\n", stdout);
+}
+
+#[test]
+fn test_output_pipe() {
+    let cat_process = Command::new("cat")
+        .arg("test.txt")
+        .stdout(Stdio::piped()) // Capture its output
+        .spawn()
+        .expect("Failed to start cat");
+
+    let cargo_process = Command::new("cargo")
+        .args(["run", "--", "-l"]) // Example: running your tool with the -l flag
+        .stdin(Stdio::from(cat_process.stdout.unwrap())) // Pipe cat's output into here
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to start cargo");
+
+    let output = cargo_process
+        .wait_with_output()
+        .expect("Failed to wait on cargo");
+
+    let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
+    assert_eq!("    7145\n", stdout);
+}
+
+#[test]
+fn test_output_pipe_test2() {
+    let cat_process = Command::new("cat")
+        .arg("test2.txt")
+        .stdout(Stdio::piped()) // Capture its output
+        .spawn()
+        .expect("Failed to start cat");
+
+    let cargo_process = Command::new("cargo")
+        .args(["run", "--", "-c"]) // Example: running your tool with the -l flag
+        .stdin(Stdio::from(cat_process.stdout.unwrap())) // Pipe cat's output into here
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to start cargo");
+
+    let output = cargo_process
+        .wait_with_output()
+        .expect("Failed to wait on cargo");
+
+    let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
+    assert_eq!("       1\n", stdout);
 }
