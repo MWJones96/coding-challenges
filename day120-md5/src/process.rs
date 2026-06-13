@@ -16,16 +16,18 @@ const SINE_TABLE: [u32; 64] = [
 
 #[rustfmt::skip]
 const INDEX_TABLE: [usize; 64] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1, 6, 11, 0, 5, 10, 15, 4, 9, 14, 3, 8,
-    13, 2, 7, 12, 5, 8, 11, 14, 1, 4, 7, 10, 13, 0, 3, 6, 9, 12, 15, 2, 0, 7, 14, 5, 12, 3, 10, 1,
-    8, 15, 6, 13, 4, 11, 2, 9,
+    0, 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+    1, 6, 11,  0,  5, 10, 15,  4,  9, 14,  3,  8, 13,  2,  7, 12, 
+    5, 8, 11, 14,  1,  4,  7, 10, 13,  0,  3,  6,  9, 12, 15,  2, 
+    0, 7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9,
 ];
 
 #[rustfmt::skip]
 const SHIFT_TABLE: [u8; 64] = [
-    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9,
-    14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15,
-    21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20, 
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
 ];
 
 #[inline]
@@ -57,6 +59,7 @@ fn l_rotate(bits: u32, amt: u8) -> u32 {
     upper | lower
 }
 
+#[inline]
 fn update<F: Fn(u32, u32, u32) -> u32>(
     a: &mut u32,
     b: u32,
@@ -67,14 +70,10 @@ fn update<F: Fn(u32, u32, u32) -> u32>(
     t: u32,
     f: F,
 ) {
-    *a = b.wrapping_add(l_rotate(
-        (*a).wrapping_add(f(b, c, d))
-            .wrapping_add(x)
-            .wrapping_add(t),
-        s,
-    ));
+    *a = b + l_rotate(*a + f(b, c, d) + x + t, s);
 }
 
+#[rustfmt::skip]
 pub fn process(mut msg: BitVec<u8, Msb0>) -> String {
     let mut A: u32 = 0x67452301;
     let mut B: u32 = 0xefcdab89;
@@ -99,21 +98,17 @@ pub fn process(mut msg: BitVec<u8, Msb0>) -> String {
             for j in 0..4 {
                 let idx: usize = i * 16 + j * 4;
 
-                #[rustfmt::skip]
                 update(&mut a, b, c, d, x[INDEX_TABLE[idx+0]], SHIFT_TABLE[idx+0], SINE_TABLE[idx+0], op);
-                #[rustfmt::skip]
                 update(&mut d, a, b, c, x[INDEX_TABLE[idx+1]], SHIFT_TABLE[idx+1], SINE_TABLE[idx+1], op);
-                #[rustfmt::skip]
                 update(&mut c, d, a, b, x[INDEX_TABLE[idx+2]], SHIFT_TABLE[idx+2], SINE_TABLE[idx+2], op);
-                #[rustfmt::skip]
                 update(&mut b, c, d, a, x[INDEX_TABLE[idx+3]], SHIFT_TABLE[idx+3], SINE_TABLE[idx+3], op);
             }
         }
 
-        A = A.wrapping_add(a);
-        B = B.wrapping_add(b);
-        C = C.wrapping_add(c);
-        D = D.wrapping_add(d);
+        A += a;
+        B += b;
+        C += c;
+        D += d;
     }
 
     let mut builder = String::new();
@@ -165,5 +160,17 @@ fn test_process() {
 
     let expected = "c3fcd3d76192e4007dfb496cca67e13b";
     let output = process(get_bits_from_str("abcdefghijklmnopqrstuvwxyz"));
+    assert_eq!(expected, output);
+
+    let expected = "d174ab98d277d9f5a5611c2c9f419d9f";
+    let output = process(get_bits_from_str(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+    ));
+    assert_eq!(expected, output);
+
+    let expected = "57edf4a22be3c955ac49da2e2107b67a";
+    let output = process(get_bits_from_str(
+        "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+    ));
     assert_eq!(expected, output);
 }
