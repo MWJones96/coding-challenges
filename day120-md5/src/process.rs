@@ -1,6 +1,16 @@
-use bitvec::{field::BitField, order::Msb0, vec::BitVec};
+use bitvec::{array::BitArray, field::BitField, order::Msb0, vec::BitVec};
 
 mod padding;
+
+fn get_bits_from_bytes(bytes: Vec<u8>) -> BitVec<u8, Msb0> {
+    bytes
+        .iter()
+        .flat_map(|&byte| {
+            let bits = BitArray::<[u8; 1], Msb0>::new([byte]);
+            bits.into_iter().collect::<Vec<bool>>()
+        })
+        .collect()
+}
 
 #[rustfmt::skip]
 const SINE_TABLE: [u32; 64] = [
@@ -74,11 +84,13 @@ fn update<F: Fn(u32, u32, u32) -> u32>(
 }
 
 #[rustfmt::skip]
-pub fn process(mut msg: BitVec<u8, Msb0>) -> String {
+pub fn process(msg: Vec<u8>) -> String {
     let mut A: u32 = 0x67452301;
     let mut B: u32 = 0xefcdab89;
     let mut C: u32 = 0x98badcfe;
     let mut D: u32 = 0x10325476;
+
+    let mut msg = get_bits_from_bytes(msg);
 
     padding::add_padding(&mut msg);
 
@@ -98,7 +110,7 @@ pub fn process(mut msg: BitVec<u8, Msb0>) -> String {
             for j in 0..4 {
                 let idx: usize = i * 16 + j * 4;
 
-                update(&mut a, b, c, d, x[INDEX_TABLE[idx+0]], SHIFT_TABLE[idx+0], SINE_TABLE[idx+0], op);
+                update(&mut a, b, c, d, x[INDEX_TABLE[idx]], SHIFT_TABLE[idx], SINE_TABLE[idx], op);
                 update(&mut d, a, b, c, x[INDEX_TABLE[idx+1]], SHIFT_TABLE[idx+1], SINE_TABLE[idx+1], op);
                 update(&mut c, d, a, b, x[INDEX_TABLE[idx+2]], SHIFT_TABLE[idx+2], SINE_TABLE[idx+2], op);
                 update(&mut b, c, d, a, x[INDEX_TABLE[idx+3]], SHIFT_TABLE[idx+3], SINE_TABLE[idx+3], op);
@@ -130,47 +142,33 @@ pub fn process(mut msg: BitVec<u8, Msb0>) -> String {
 
 #[test]
 fn test_process() {
-    use bitvec::array::BitArray;
-
-    fn get_bits_from_str(str: &str) -> BitVec<u8, Msb0> {
-        str.as_bytes()
-            .iter()
-            .flat_map(|&byte| {
-                let bits = BitArray::<[u8; 1], Msb0>::new([byte]);
-                bits.into_iter().collect::<Vec<bool>>()
-            })
-            .collect()
-    }
-
     let expected = "d41d8cd98f00b204e9800998ecf8427e";
-    let output = process(get_bits_from_str(""));
+    let output = process("".into());
     assert_eq!(expected, output);
 
     let expected = "0cc175b9c0f1b6a831c399e269772661";
-    let output = process(get_bits_from_str("a"));
+    let output = process("a".into());
     assert_eq!(expected, output);
 
     let expected = "900150983cd24fb0d6963f7d28e17f72";
-    let output = process(get_bits_from_str("abc"));
+    let output = process("abc".into());
     assert_eq!(expected, output);
 
     let expected = "f96b697d7cb7938d525a2f31aaf161d0";
-    let output = process(get_bits_from_str("message digest"));
+    let output = process("message digest".into());
     assert_eq!(expected, output);
 
     let expected = "c3fcd3d76192e4007dfb496cca67e13b";
-    let output = process(get_bits_from_str("abcdefghijklmnopqrstuvwxyz"));
+    let output = process("abcdefghijklmnopqrstuvwxyz".into());
     assert_eq!(expected, output);
 
     let expected = "d174ab98d277d9f5a5611c2c9f419d9f";
-    let output = process(get_bits_from_str(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-    ));
+    let output = process("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".into());
     assert_eq!(expected, output);
 
     let expected = "57edf4a22be3c955ac49da2e2107b67a";
-    let output = process(get_bits_from_str(
-        "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
-    ));
+    let output = process(
+        "12345678901234567890123456789012345678901234567890123456789012345678901234567890".into(),
+    );
     assert_eq!(expected, output);
 }
