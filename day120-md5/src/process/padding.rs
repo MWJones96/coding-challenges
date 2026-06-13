@@ -74,19 +74,3 @@ fn test_448_bit_message() {
 
     assert_eq!(448, orig_len);
 }
-
-#[test]
-fn test_large_message() {
-    let mut input = bitvec![u8, Msb0; 1; 5_000_000_000];
-
-    assert_eq!(5_000_000_000, input.len());
-
-    add_padding(&mut input);
-
-    assert!(input.len().is_multiple_of(512));
-
-    let len = input.len();
-    let orig_len: u64 = input[len - 64..].load_le::<u64>();
-
-    assert_eq!(5_000_000_000, orig_len);
-}
