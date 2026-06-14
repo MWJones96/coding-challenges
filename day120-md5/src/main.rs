@@ -1,4 +1,7 @@
-use std::io::{self, Read};
+use std::{
+    fs,
+    io::{self, Read},
+};
 
 use clap::Parser;
 
@@ -20,7 +23,8 @@ fn main() {
         println!("{}  -", output);
     } else {
         for file in args.files {
-            println!("Received file: {}", file);
+            let output = process::process(fs::read(&file).unwrap());
+            println!("{}  {}", output, &file);
         }
     }
 }
