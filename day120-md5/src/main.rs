@@ -14,30 +14,38 @@ struct Args {
     files: Vec<String>,
 }
 
+fn print_stdin() {
+    let mut buffer = Vec::new();
+    io::stdin().read_to_end(&mut buffer).unwrap();
+
+    let output = process::process(buffer);
+    println!("{}  -", output);
+}
+
 fn main() {
     let args = Args::parse();
     let mut has_error = false;
 
     if args.files.is_empty() {
-        let mut buffer = Vec::new();
-        io::stdin().read_to_end(&mut buffer).unwrap();
-
-        let output = process::process(buffer);
-        println!("{}  -", output);
+        print_stdin();
     } else {
         for file in args.files {
-            match fs::read(&file) {
-                Ok(bytes) => {
-                    let output = process::process(bytes);
-                    println!("{}  {}", output, &file);
-                }
-                Err(_) => {
-                    eprintln!(
-                        "{}: {}: No such file or directory",
-                        Args::command().get_name(),
-                        &file
-                    );
-                    has_error = true;
+            if file == "-" {
+                print_stdin();
+            } else {
+                match fs::read(&file) {
+                    Ok(bytes) => {
+                        let output = process::process(bytes);
+                        println!("{}  {}", output, &file);
+                    }
+                    Err(_) => {
+                        eprintln!(
+                            "{}: {}: No such file or directory",
+                            Args::command().get_name(),
+                            &file
+                        );
+                        has_error = true;
+                    }
                 }
             }
         }
