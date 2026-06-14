@@ -12,6 +12,9 @@ mod process;
 struct Args {
     #[arg(num_args = 1..)]
     files: Vec<String>,
+
+    #[arg(short, long)]
+    binary: bool,
 }
 
 fn print_stdin() {
@@ -35,8 +38,12 @@ fn main() {
             } else {
                 match fs::read(&file) {
                     Ok(bytes) => {
+                        let mark = match args.binary {
+                            true => "*",
+                            false => " ",
+                        };
                         let output = process::process(bytes);
-                        println!("{}  {}", output, &file);
+                        println!("{} {}{}", output, mark, &file);
                     }
                     Err(_) => {
                         eprintln!(

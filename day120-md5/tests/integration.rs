@@ -66,3 +66,22 @@ fn test_md5_one_file_and_stdin() {
             d41d8cd98f00b204e9800998ecf8427e  -\n",
         ));
 }
+
+#[test]
+fn test_md5_binary_flag() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["tests/test_file.txt", "-b"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "cfa563b916ab0abd03659d0c40aef995 *tests/test_file.txt\n",
+        ));
+
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["tests/test_file.txt", "--binary"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "cfa563b916ab0abd03659d0c40aef995 *tests/test_file.txt\n",
+        ));
+}
