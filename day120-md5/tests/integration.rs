@@ -105,10 +105,12 @@ fn test_md5_bad_checksum_file() {
         .assert()
         .failure()
         .code(1)
-        .stderr(predicate::eq(
+        .stdout(predicate::eq(
             "tests/test_file.txt: FAILED\n\
-            tests/test_file2.txt: FAILED\n\
-            day120-md5: WARNING: 2 computed checksums did NOT match\n",
+            tests/test_file2.txt: FAILED\n",
+        ))
+        .stderr(predicate::eq(
+            "day120-md5: WARNING: 2 computed checksums did NOT match\n",
         ));
 }
 
@@ -121,11 +123,11 @@ fn test_md5_multiple_checksum_files() {
         .code(1)
         .stdout(predicate::eq(
             "tests/test_file.txt: OK\n\
-            tests/test_file2.txt: OK\n",
+            tests/test_file2.txt: OK\n\
+            tests/test_file.txt: FAILED\n\
+            tests/test_file2.txt: FAILED\n",
         ))
         .stderr(predicate::eq(
-            "tests/test_file.txt: FAILED\n\
-            tests/test_file2.txt: FAILED\n\
-            day120-md5: WARNING: 2 computed checksums did NOT match\n",
+            "day120-md5: WARNING: 2 computed checksums did NOT match\n",
         ));
 }
