@@ -97,3 +97,16 @@ fn test_md5_checksum_file() {
             tests/test_file2.txt: OK\n",
         ));
 }
+
+#[test]
+fn test_md5_bad_checksum_file() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-c", "tests/checksums_bad.txt"])
+        .assert()
+        .success()
+        .stderr(predicate::eq(
+            "tests/test_file.txt: FAILED\n\
+            tests/test_file2.txt: FAILED\n\
+            day120-md5: WARNING: 2 computed checksums did NOT match\n",
+        ));
+}

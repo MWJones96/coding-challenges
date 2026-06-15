@@ -35,6 +35,7 @@ fn main() {
     if let Some(file) = args.check {
         let file = File::open(file).unwrap();
         let reader = io::BufReader::new(file);
+        let mut no_matches = 0;
 
         for line in reader.lines() {
             let line: String = line.unwrap().replace('*', " ");
@@ -47,10 +48,21 @@ fn main() {
                     let output = process::process(bytes);
                     if output == hash {
                         println!("{}: OK", &file_h);
+                    } else {
+                        eprintln!("{}: FAILED", &file_h);
+                        no_matches += 1;
                     }
                 }
                 Err(_) => todo!(),
             }
+        }
+        if no_matches > 0 {
+            eprintln!(
+                "{}: WARNING: {} computed checksum{} did NOT match",
+                Args::command().get_name(),
+                no_matches,
+                if no_matches > 1 { "s" } else { "" }
+            );
         }
     } else if args.files.is_empty() {
         print_stdin();
