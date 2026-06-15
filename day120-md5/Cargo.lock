@@ -159,6 +159,7 @@ dependencies = [
  "bitvec",
  "clap",
  "predicates",
+ "regex",
 ]
 
 [[package]]

@@ -131,3 +131,29 @@ fn test_md5_multiple_checksum_files() {
             "day120-md5: WARNING: 2 computed checksums did NOT match\n",
         ));
 }
+
+#[test]
+fn test_md5_multiple_checksum_files_and_bad_format() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args([
+        "-c",
+        "tests/checksums.txt",
+        "tests/test_file.txt",
+        "tests/checksums_bad.txt",
+        "tests/test_file2.txt",
+    ])
+    .assert()
+    .failure()
+    .code(1)
+    .stdout(predicate::eq(
+        "tests/test_file.txt: OK\n\
+            tests/test_file2.txt: OK\n\
+            tests/test_file.txt: FAILED\n\
+            tests/test_file2.txt: FAILED\n",
+    ))
+    .stderr(predicate::eq(
+        "day120-md5: tests/test_file.txt: no properly formatted checksum lines found\n\
+        day120-md5: WARNING: 2 computed checksums did NOT match\n\
+        day120-md5: tests/test_file2.txt: no properly formatted checksum lines found\n",
+    ));
+}
