@@ -1,6 +1,6 @@
 use std::{
-    fs,
-    io::{self, Read},
+    fs::{self, File},
+    io::{self, BufRead, Read},
 };
 
 use clap::{CommandFactory, Parser};
@@ -15,6 +15,9 @@ struct Args {
 
     #[arg(short, long)]
     binary: bool,
+
+    #[arg(short, long)]
+    check: Option<String>,
 }
 
 fn print_stdin() {
@@ -29,7 +32,27 @@ fn main() {
     let args = Args::parse();
     let mut has_error = false;
 
-    if args.files.is_empty() {
+    if let Some(file) = args.check {
+        let file = File::open(file).unwrap();
+        let reader = io::BufReader::new(file);
+
+        for line in reader.lines() {
+            let line: String = line.unwrap().replace('*', " ");
+            let line: Vec<&str> = line.split_whitespace().collect();
+            let hash = line[0];
+            let file_h = line[1];
+
+            match fs::read(file_h) {
+                Ok(bytes) => {
+                    let output = process::process(bytes);
+                    if output == hash {
+                        println!("{}: OK", &file_h);
+                    }
+                }
+                Err(_) => todo!(),
+            }
+        }
+    } else if args.files.is_empty() {
         print_stdin();
     } else {
         for file in args.files {

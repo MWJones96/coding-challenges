@@ -85,10 +85,10 @@ fn update<F: Fn(u32, u32, u32) -> u32>(
 
 #[rustfmt::skip]
 pub fn process(msg: Vec<u8>) -> String {
-    let mut A: u32 = 0x67452301;
-    let mut B: u32 = 0xefcdab89;
-    let mut C: u32 = 0x98badcfe;
-    let mut D: u32 = 0x10325476;
+    let mut aa: u32 = 0x67452301;
+    let mut bb: u32 = 0xefcdab89;
+    let mut cc: u32 = 0x98badcfe;
+    let mut dd: u32 = 0x10325476;
 
     let mut msg = get_bits_from_bytes(msg);
 
@@ -101,10 +101,10 @@ pub fn process(msg: Vec<u8>) -> String {
             .collect::<_>();
         let x: [u32; 16] = x.try_into().expect("X must contain exactly 16 elements");
 
-        let mut a = A;
-        let mut b = B;
-        let mut c = C;
-        let mut d = D;
+        let mut a = aa;
+        let mut b = bb;
+        let mut c = cc;
+        let mut d = dd;
 
         for (i, op) in [f, g, h, i].iter().enumerate() {
             for j in 0..4 {
@@ -117,23 +117,23 @@ pub fn process(msg: Vec<u8>) -> String {
             }
         }
 
-        A += a;
-        B += b;
-        C += c;
-        D += d;
+        aa += a;
+        bb += b;
+        cc += c;
+        dd += d;
     }
 
     let mut builder = String::new();
-    for byte in A.to_le_bytes() {
+    for byte in aa.to_le_bytes() {
         builder.push_str(&format!("{:02x}", byte));
     }
-    for byte in B.to_le_bytes() {
+    for byte in bb.to_le_bytes() {
         builder.push_str(&format!("{:02x}", byte));
     }
-    for byte in C.to_le_bytes() {
+    for byte in cc.to_le_bytes() {
         builder.push_str(&format!("{:02x}", byte));
     }
-    for byte in D.to_le_bytes() {
+    for byte in dd.to_le_bytes() {
         builder.push_str(&format!("{:02x}", byte));
     }
 

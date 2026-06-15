@@ -85,3 +85,15 @@ fn test_md5_binary_flag() {
             "cfa563b916ab0abd03659d0c40aef995 *tests/test_file.txt\n",
         ));
 }
+
+#[test]
+fn test_md5_checksum_file() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-c", "tests/checksums.txt"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "tests/test_file.txt: OK\n\
+            tests/test_file2.txt: OK\n",
+        ));
+}
