@@ -213,3 +213,18 @@ fn test_md5_checksum_from_stdin() {
             tests/test_file2.txt: OK\n",
         ));
 }
+
+#[test]
+fn test_md5_stdin_in_args() {
+    let stdin = include_str!("checksums.txt");
+
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-c", "-"])
+        .write_stdin(stdin)
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "tests/test_file.txt: OK\n\
+            tests/test_file2.txt: OK\n",
+        ));
+}
