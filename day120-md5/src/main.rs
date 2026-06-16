@@ -6,6 +6,8 @@ use std::{
 use clap::{CommandFactory, Parser};
 use regex::Regex;
 
+use crate::process::{ComputeHash, md5::MD5};
+
 mod process;
 
 #[derive(Parser, Debug)]
@@ -35,7 +37,7 @@ fn process_stdin(c: bool, q: bool, s: bool) -> i32 {
     if c {
         ret = print_file_checks(buffer, "-", q, s);
     } else {
-        let output = process::process(buffer);
+        let output = MD5::process(buffer);
         if !s {
             println!("{}  -", output);
         }
@@ -49,7 +51,7 @@ fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str, s: bool) {
         true => "*",
         false => " ",
     };
-    let output = process::process(bytes);
+    let output = MD5::process(bytes);
     if !s {
         println!("{} {}{}", output, mark, file);
     }
@@ -77,7 +79,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
 
         match fs::read(file_to_check) {
             Ok(bytes) => {
-                let output = process::process(bytes);
+                let output = MD5::process(bytes);
                 if output == precomputed_hash {
                     if !q && !s {
                         println!("{}: OK", &file_to_check);

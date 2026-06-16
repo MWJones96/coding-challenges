@@ -130,9 +130,9 @@ fn test_md5_multiple_checksum_files() {
     .code(1)
     .stdout(predicate::eq(
         "tests/fixtures/test_file.txt: OK\n\
-            tests/fixtures/test_file2.txt: OK\n\
-            tests/fixtures/test_file.txt: FAILED\n\
-            tests/fixtures/test_file2.txt: FAILED\n",
+        tests/fixtures/test_file2.txt: OK\n\
+        tests/fixtures/test_file.txt: FAILED\n\
+        tests/fixtures/test_file2.txt: FAILED\n",
     ))
     .stderr(predicate::eq(
         "day120-md5: WARNING: 2 computed checksums did NOT match\n",
@@ -280,7 +280,7 @@ fn test_md5_status_flag() {
         "tests/fixtures/test_file.txt",
         "tests/fixtures/checksums_bad.txt",
         "tests/fixtures/test_file2.txt",
-        "tests/fixtures/checksum2.txt",
+        "tests/fixtures/checksums2.txt",
     ])
     .assert()
     .failure()
