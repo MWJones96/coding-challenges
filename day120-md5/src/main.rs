@@ -79,10 +79,8 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
             Ok(bytes) => {
                 let output = process::process(bytes);
                 if output == precomputed_hash {
-                    if !q {
-                        if !s {
-                            println!("{}: OK", &file_to_check);
-                        }
+                    if !q && !s {
+                        println!("{}: OK", &file_to_check);
                     }
                 } else {
                     if !s {
@@ -121,18 +119,16 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
                 file,
             );
         }
-    } else if bad_lines > 0 {
-        if !s {
-            eprintln!(
-                "{}: WARNING: {} line{} improperly formatted",
-                Args::command().get_name(),
-                bad_lines,
-                if bad_lines > 1 { "s are" } else { " is" }
-            );
-        }
+    } else if bad_lines > 0 && !s {
+        eprintln!(
+            "{}: WARNING: {} line{} improperly formatted",
+            Args::command().get_name(),
+            bad_lines,
+            if bad_lines > 1 { "s are" } else { " is" }
+        );
     }
 
-    if bad_file_paths.len() > 0 {
+    if !bad_file_paths.is_empty() {
         for file in bad_file_paths.iter() {
             if !s {
                 eprintln!(

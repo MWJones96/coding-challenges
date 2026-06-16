@@ -1,2 +1,0 @@
-cfa563b916ab0abd03659d0c40aef995  tests/test_file.txt
-no-match-checksum-format

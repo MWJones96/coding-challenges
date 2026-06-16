@@ -1,0 +1,2 @@
+cfa563b916ab0abd03659d0c40aef995  tests/fixtures/test_file.txt
+00000000000000000000000000000000  does-not-exist

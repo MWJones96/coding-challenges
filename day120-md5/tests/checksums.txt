@@ -1,2 +1,0 @@
-cfa563b916ab0abd03659d0c40aef995  tests/test_file.txt
-2465ade3580e8edbcf5ed56ed8e1da0c  tests/test_file2.txt
