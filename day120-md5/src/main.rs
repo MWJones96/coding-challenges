@@ -19,15 +19,18 @@ struct Args {
 
     #[arg(short, long)]
     check: bool,
+
+    #[arg(long)]
+    quiet: bool,
 }
 
-fn process_stdin(c: bool) -> i32 {
+fn process_stdin(c: bool, q: bool) -> i32 {
     let mut buffer = Vec::new();
     let mut ret = 0;
     io::stdin().read_to_end(&mut buffer).unwrap();
 
     if c {
-        ret = print_file_checks(buffer, "-");
+        ret = print_file_checks(buffer, "-", q);
     } else {
         let output = process::process(buffer);
         println!("{}  -", output);
@@ -45,7 +48,7 @@ fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str) {
     println!("{} {}{}", output, mark, file);
 }
 
-fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
+fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool) -> i32 {
     let mut no_matches = 0;
     let mut bad_lines = 0;
     let mut bad_file_paths: Vec<String> = vec![];
@@ -69,7 +72,9 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
             Ok(bytes) => {
                 let output = process::process(bytes);
                 if output == precomputed_hash {
-                    println!("{}: OK", &file_to_check);
+                    if !q {
+                        println!("{}: OK", &file_to_check);
+                    }
                 } else {
                     println!("{}: FAILED", &file_to_check);
                     no_matches += 1;
@@ -130,16 +135,16 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
     ret
 }
 
-fn process_files(files: Vec<String>, b: bool, c: bool) -> i32 {
+fn process_files(files: Vec<String>, b: bool, c: bool, q: bool) -> i32 {
     let mut ret = 0;
     for file in files {
         if file == "-" {
-            process_stdin(c);
+            process_stdin(c, q);
         } else {
             match fs::read(&file) {
                 Ok(bytes) => {
                     if c {
-                        if print_file_checks(bytes, &file) > 0 {
+                        if print_file_checks(bytes, &file, q) > 0 {
                             ret = 1;
                         }
                     } else {
@@ -165,8 +170,8 @@ fn main() {
     let args = Args::parse();
 
     let code = match args.files.is_empty() {
-        true => process_stdin(args.check),
-        false => process_files(args.files, args.binary, args.check),
+        true => process_stdin(args.check, args.quiet),
+        false => process_files(args.files, args.binary, args.check, args.quiet),
     };
 
     std::process::exit(code);

@@ -228,3 +228,37 @@ fn test_md5_stdin_in_args() {
             tests/test_file2.txt: OK\n",
         ));
 }
+
+#[test]
+fn test_md5_quiet_flag() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args([
+        "-c",
+        "--quiet",
+        "tests/checksums.txt",
+        "tests/checksums_bad.txt",
+    ])
+    .assert()
+    .failure()
+    .code(1)
+    .stdout(predicate::eq(
+        "tests/test_file.txt: FAILED\n\
+        tests/test_file2.txt: FAILED\n",
+    ))
+    .stderr(predicate::eq(
+        "day120-md5: WARNING: 2 computed checksums did NOT match\n",
+    ));
+}
+
+#[test]
+fn test_md5_quiet_flag_with_stdin() {
+    let stdin = include_str!("checksums.txt");
+
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["--quiet", "-c"])
+        .write_stdin(stdin)
+        .assert()
+        .success()
+        .stdout("")
+        .stderr("");
+}
