@@ -191,10 +191,25 @@ fn test_md5_checksum_file_contains_file_that_does_not_exist() {
         .code(1)
         .stdout(predicate::eq(
             "tests/test_file.txt: OK\n\
-                does-not-exist: FAILED open or read\n",
+            does-not-exist: FAILED open or read\n",
         ))
         .stderr(predicate::eq(
             "day120-md5: does-not-exist: No such file or directory\n\
                 day120-md5: WARNING: 1 listed file could not be read\n",
+        ));
+}
+
+#[test]
+fn test_md5_checksum_from_stdin() {
+    let stdin = include_str!("checksums.txt");
+
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.arg("-c")
+        .write_stdin(stdin)
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "tests/test_file.txt: OK\n\
+            tests/test_file2.txt: OK\n",
         ));
 }

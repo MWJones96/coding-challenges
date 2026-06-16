@@ -21,14 +21,19 @@ struct Args {
     check: bool,
 }
 
-fn process_stdin() -> i32 {
+fn process_stdin(c: bool) -> i32 {
     let mut buffer = Vec::new();
+    let mut ret = 0;
     io::stdin().read_to_end(&mut buffer).unwrap();
 
-    let output = process::process(buffer);
-    println!("{}  -", output);
+    if c {
+        ret = print_file_checks(buffer, "-");
+    } else {
+        let output = process::process(buffer);
+        println!("{}  -", output);
+    }
 
-    0
+    ret
 }
 
 fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str) {
@@ -129,7 +134,7 @@ fn process_files(files: Vec<String>, b: bool, c: bool) -> i32 {
     let mut ret = 0;
     for file in files {
         if file == "-" {
-            process_stdin();
+            process_stdin(c);
         } else {
             match fs::read(&file) {
                 Ok(bytes) => {
@@ -160,7 +165,7 @@ fn main() {
     let args = Args::parse();
 
     let code = match args.files.is_empty() {
-        true => process_stdin(),
+        true => process_stdin(args.check),
         false => process_files(args.files, args.binary, args.check),
     };
 
