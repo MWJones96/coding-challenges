@@ -169,3 +169,32 @@ fn test_md5_checksum_file_bad_line() {
             "day120-md5: WARNING: 1 line is improperly formatted\n",
         ));
 }
+
+#[test]
+fn test_md5_checksum_file_does_not_exist() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-c", "does-not-exist"])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::eq(
+            "day120-md5: does-not-exist: No such file or directory\n",
+        ));
+}
+
+#[test]
+fn test_md5_checksum_file_contains_file_that_does_not_exist() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-c", "tests/checksum_no_exist.txt"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicate::eq(
+            "tests/test_file.txt: OK\n\
+                does-not-exist: FAILED open or read\n",
+        ))
+        .stderr(predicate::eq(
+            "day120-md5: does-not-exist: No such file or directory\n\
+                day120-md5: WARNING: 1 listed file could not be read\n",
+        ));
+}

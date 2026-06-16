@@ -43,6 +43,8 @@ fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str) {
 fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
     let mut no_matches = 0;
     let mut bad_lines = 0;
+    let mut bad_file_paths: Vec<String> = vec![];
+    let mut ret = 0;
     let re = Regex::new(r"^([0-9a-f]+)(?:  | \*)(.+)+$").unwrap();
 
     let checksum_lines = std::str::from_utf8(&bytes).unwrap();
@@ -68,7 +70,10 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
                     no_matches += 1;
                 }
             }
-            Err(_) => todo!(),
+            Err(_) => {
+                println!("{}: FAILED open or read", &file_to_check);
+                bad_file_paths.push(file_to_check.to_string());
+            }
         }
     }
 
@@ -79,7 +84,11 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
             no_matches,
             if no_matches > 1 { "s" } else { "" }
         );
-    } else if bad_lines == cs_line_count {
+
+        ret = 1;
+    }
+
+    if bad_lines == cs_line_count {
         eprintln!(
             "{}: {}: no properly formatted checksum lines found",
             Args::command().get_name(),
@@ -94,7 +103,26 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
         );
     }
 
-    if no_matches > 0 { 1 } else { 0 }
+    if bad_file_paths.len() > 0 {
+        for file in bad_file_paths.iter() {
+            eprintln!(
+                "{}: {}: No such file or directory",
+                Args::command().get_name(),
+                &file
+            );
+        }
+
+        eprintln!(
+            "{}: WARNING: {} listed file{} could not be read",
+            Args::command().get_name(),
+            bad_file_paths.len(),
+            if bad_file_paths.len() > 1 { "s" } else { "" }
+        );
+
+        ret = 1;
+    }
+
+    ret
 }
 
 fn process_files(files: Vec<String>, b: bool, c: bool) -> i32 {
