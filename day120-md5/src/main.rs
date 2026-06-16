@@ -46,6 +46,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
     let re = Regex::new(r"^([0-9a-f]+)(?:  | \*)(.+)+$").unwrap();
 
     let checksum_lines = std::str::from_utf8(&bytes).unwrap();
+    let cs_line_count = checksum_lines.lines().count();
     for line in checksum_lines.lines() {
         let caps = re.captures(line.trim());
         if caps.is_none() {
@@ -79,7 +80,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
             if no_matches > 1 { "s" } else { "" }
         );
         return 1;
-    } else if bad_lines == checksum_lines.lines().count() {
+    } else if bad_lines == cs_line_count {
         eprintln!(
             "{}: {}: no properly formatted checksum lines found",
             Args::command().get_name(),

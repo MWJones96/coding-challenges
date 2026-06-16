@@ -70,17 +70,9 @@ fn l_rotate(bits: u32, amt: u8) -> u32 {
 }
 
 #[inline]
-fn update<F: Fn(u32, u32, u32) -> u32>(
-    a: &mut u32,
-    b: u32,
-    c: u32,
-    d: u32,
-    x: u32,
-    s: u8,
-    t: u32,
-    f: F,
-) {
-    *a = b + l_rotate(*a + f(b, c, d) + x + t, s);
+fn update<F: Fn(u32, u32, u32) -> u32>(registers: [u32; 4], x: u32, s: u8, t: u32, f: F) -> u32 {
+    let [a, b, c, d] = registers;
+    b + l_rotate(a + f(b, c, d) + x + t, s)
 }
 
 #[rustfmt::skip]
@@ -110,10 +102,10 @@ pub fn process(msg: Vec<u8>) -> String {
             for j in 0..4 {
                 let idx: usize = i * 16 + j * 4;
 
-                update(&mut a, b, c, d, x[INDEX_TABLE[idx]], SHIFT_TABLE[idx], SINE_TABLE[idx], op);
-                update(&mut d, a, b, c, x[INDEX_TABLE[idx+1]], SHIFT_TABLE[idx+1], SINE_TABLE[idx+1], op);
-                update(&mut c, d, a, b, x[INDEX_TABLE[idx+2]], SHIFT_TABLE[idx+2], SINE_TABLE[idx+2], op);
-                update(&mut b, c, d, a, x[INDEX_TABLE[idx+3]], SHIFT_TABLE[idx+3], SINE_TABLE[idx+3], op);
+                a = update([a, b, c, d], x[INDEX_TABLE[idx]], SHIFT_TABLE[idx], SINE_TABLE[idx], op);
+                d = update([d, a, b, c], x[INDEX_TABLE[idx+1]], SHIFT_TABLE[idx+1], SINE_TABLE[idx+1], op);
+                c = update([c, d, a, b], x[INDEX_TABLE[idx+2]], SHIFT_TABLE[idx+2], SINE_TABLE[idx+2], op);
+                b = update([b, c, d, a], x[INDEX_TABLE[idx+3]], SHIFT_TABLE[idx+3], SINE_TABLE[idx+3], op);
             }
         }
 
