@@ -262,3 +262,22 @@ fn test_md5_quiet_flag_with_stdin() {
         .stdout("")
         .stderr("");
 }
+
+#[test]
+fn test_md5_status_flag() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args([
+        "-c",
+        "--status",
+        "tests/checksums.txt",
+        "tests/test_file.txt",
+        "tests/checksums_bad.txt",
+        "tests/test_file2.txt",
+        "tests/checksum2.txt",
+    ])
+    .assert()
+    .failure()
+    .code(1)
+    .stdout("")
+    .stderr("");
+}

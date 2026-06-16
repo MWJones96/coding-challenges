@@ -22,33 +22,40 @@ struct Args {
 
     #[arg(long)]
     quiet: bool,
+
+    #[arg(long)]
+    status: bool,
 }
 
-fn process_stdin(c: bool, q: bool) -> i32 {
+fn process_stdin(c: bool, q: bool, s: bool) -> i32 {
     let mut buffer = Vec::new();
     let mut ret = 0;
     io::stdin().read_to_end(&mut buffer).unwrap();
 
     if c {
-        ret = print_file_checks(buffer, "-", q);
+        ret = print_file_checks(buffer, "-", q, s);
     } else {
         let output = process::process(buffer);
-        println!("{}  -", output);
+        if !s {
+            println!("{}  -", output);
+        }
     }
 
     ret
 }
 
-fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str) {
+fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str, s: bool) {
     let mark = match b {
         true => "*",
         false => " ",
     };
     let output = process::process(bytes);
-    println!("{} {}{}", output, mark, file);
+    if !s {
+        println!("{} {}{}", output, mark, file);
+    }
 }
 
-fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool) -> i32 {
+fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
     let mut no_matches = 0;
     let mut bad_lines = 0;
     let mut bad_file_paths: Vec<String> = vec![];
@@ -73,61 +80,77 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool) -> i32 {
                 let output = process::process(bytes);
                 if output == precomputed_hash {
                     if !q {
-                        println!("{}: OK", &file_to_check);
+                        if !s {
+                            println!("{}: OK", &file_to_check);
+                        }
                     }
                 } else {
-                    println!("{}: FAILED", &file_to_check);
+                    if !s {
+                        println!("{}: FAILED", &file_to_check);
+                    }
                     no_matches += 1;
                 }
             }
             Err(_) => {
-                println!("{}: FAILED open or read", &file_to_check);
+                if !s {
+                    println!("{}: FAILED open or read", &file_to_check);
+                }
                 bad_file_paths.push(file_to_check.to_string());
             }
         }
     }
 
     if no_matches > 0 {
-        eprintln!(
-            "{}: WARNING: {} computed checksum{} did NOT match",
-            Args::command().get_name(),
-            no_matches,
-            if no_matches > 1 { "s" } else { "" }
-        );
+        if !s {
+            eprintln!(
+                "{}: WARNING: {} computed checksum{} did NOT match",
+                Args::command().get_name(),
+                no_matches,
+                if no_matches > 1 { "s" } else { "" }
+            );
+        }
 
         ret = 1;
     }
 
     if bad_lines == cs_line_count {
-        eprintln!(
-            "{}: {}: no properly formatted checksum lines found",
-            Args::command().get_name(),
-            file,
-        );
+        if !s {
+            eprintln!(
+                "{}: {}: no properly formatted checksum lines found",
+                Args::command().get_name(),
+                file,
+            );
+        }
     } else if bad_lines > 0 {
-        eprintln!(
-            "{}: WARNING: {} line{} improperly formatted",
-            Args::command().get_name(),
-            bad_lines,
-            if bad_lines > 1 { "s are" } else { " is" }
-        );
+        if !s {
+            eprintln!(
+                "{}: WARNING: {} line{} improperly formatted",
+                Args::command().get_name(),
+                bad_lines,
+                if bad_lines > 1 { "s are" } else { " is" }
+            );
+        }
     }
 
     if bad_file_paths.len() > 0 {
         for file in bad_file_paths.iter() {
-            eprintln!(
-                "{}: {}: No such file or directory",
-                Args::command().get_name(),
-                &file
-            );
+            if !s {
+                eprintln!(
+                    "{}: {}: No such file or directory",
+                    Args::command().get_name(),
+                    &file
+                );
+            }
         }
 
-        eprintln!(
-            "{}: WARNING: {} listed file{} could not be read",
-            Args::command().get_name(),
-            bad_file_paths.len(),
-            if bad_file_paths.len() > 1 { "s" } else { "" }
-        );
+        if !s {
+            eprintln!(
+                "{}: WARNING: {} listed file{} could not be read",
+                Args::command().get_name(),
+                bad_file_paths.len(),
+                if bad_file_paths.len() > 1 { "s" } else { "" }
+            );
+        }
 
         ret = 1;
     }
@@ -135,28 +158,30 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool) -> i32 {
     ret
 }
 
-fn process_files(files: Vec<String>, b: bool, c: bool, q: bool) -> i32 {
+fn process_files(files: Vec<String>, b: bool, c: bool, q: bool, s: bool) -> i32 {
     let mut ret = 0;
     for file in files {
         if file == "-" {
-            process_stdin(c, q);
+            process_stdin(c, q, s);
         } else {
             match fs::read(&file) {
                 Ok(bytes) => {
                     if c {
-                        if print_file_checks(bytes, &file, q) > 0 {
+                        if print_file_checks(bytes, &file, q, s) > 0 {
                             ret = 1;
                         }
                     } else {
-                        print_file_hash(bytes, b, &file);
+                        print_file_hash(bytes, b, &file, s);
                     }
                 }
                 Err(_) => {
-                    eprintln!(
-                        "{}: {}: No such file or directory",
-                        Args::command().get_name(),
-                        &file
-                    );
+                    if !s {
+                        eprintln!(
+                            "{}: {}: No such file or directory",
+                            Args::command().get_name(),
+                            &file
+                        );
+                    }
                     ret = 1;
                 }
             }
@@ -170,8 +195,8 @@ fn main() {
     let args = Args::parse();
 
     let code = match args.files.is_empty() {
-        true => process_stdin(args.check, args.quiet),
-        false => process_files(args.files, args.binary, args.check, args.quiet),
+        true => process_stdin(args.check, args.quiet, args.status),
+        false => process_files(args.files, args.binary, args.check, args.quiet, args.status),
     };
 
     std::process::exit(code);
