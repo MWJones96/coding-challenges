@@ -157,3 +157,15 @@ fn test_md5_multiple_checksum_files_and_bad_format() {
         day120-md5: tests/test_file2.txt: no properly formatted checksum lines found\n",
     ));
 }
+
+#[test]
+fn test_md5_checksum_file_bad_line() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-c", "tests/checksums2.txt"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("tests/test_file.txt: OK\n"))
+        .stderr(predicate::eq(
+            "day120-md5: WARNING: 1 line is improperly formatted\n",
+        ));
+}

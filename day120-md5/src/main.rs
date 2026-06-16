@@ -79,17 +79,22 @@ fn print_file_checks(bytes: Vec<u8>, file: &str) -> i32 {
             no_matches,
             if no_matches > 1 { "s" } else { "" }
         );
-        return 1;
     } else if bad_lines == cs_line_count {
         eprintln!(
             "{}: {}: no properly formatted checksum lines found",
             Args::command().get_name(),
             file,
         );
-        return 1;
+    } else if bad_lines > 0 {
+        eprintln!(
+            "{}: WARNING: {} line{} improperly formatted",
+            Args::command().get_name(),
+            bad_lines,
+            if bad_lines > 1 { "s are" } else { " is" }
+        );
     }
 
-    0
+    if no_matches > 0 { 1 } else { 0 }
 }
 
 fn process_files(files: Vec<String>, b: bool, c: bool) -> i32 {
@@ -101,7 +106,9 @@ fn process_files(files: Vec<String>, b: bool, c: bool) -> i32 {
             match fs::read(&file) {
                 Ok(bytes) => {
                     if c {
-                        ret = print_file_checks(bytes, &file);
+                        if print_file_checks(bytes, &file) > 0 {
+                            ret = 1;
+                        }
                     } else {
                         print_file_hash(bytes, b, &file);
                     }
