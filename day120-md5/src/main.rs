@@ -29,16 +29,16 @@ struct Args {
     status: bool,
 }
 
-fn process_stdin(c: bool, q: bool, s: bool) -> i32 {
+fn process_stdin(args: &Args) -> i32 {
     let mut buffer = Vec::new();
     let mut ret = 0;
     io::stdin().read_to_end(&mut buffer).unwrap();
 
-    if c {
-        ret = print_file_checks(buffer, "-", q, s);
+    if args.check {
+        ret = print_file_checks(buffer, "-", args);
     } else {
         let output = MD5::process(buffer);
-        if !s {
+        if !args.status {
             println!("{}  -", output);
         }
     }
@@ -46,18 +46,18 @@ fn process_stdin(c: bool, q: bool, s: bool) -> i32 {
     ret
 }
 
-fn print_file_hash(bytes: Vec<u8>, b: bool, file: &str, s: bool) {
-    let mark = match b {
+fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) {
+    let mark = match args.binary {
         true => "*",
         false => " ",
     };
     let output = MD5::process(bytes);
-    if !s {
+    if !args.status {
         println!("{} {}{}", output, mark, file);
     }
 }
 
-fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
+fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     let mut no_matches = 0;
     let mut bad_lines = 0;
     let mut bad_file_paths: Vec<String> = vec![];
@@ -81,18 +81,18 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
             Ok(bytes) => {
                 let output = MD5::process(bytes);
                 if output == precomputed_hash {
-                    if !q && !s {
+                    if !args.quiet && !args.status {
                         println!("{}: OK", &file_to_check);
                     }
                 } else {
-                    if !s {
+                    if !args.status {
                         println!("{}: FAILED", &file_to_check);
                     }
                     no_matches += 1;
                 }
             }
             Err(_) => {
-                if !s {
+                if !args.status {
                     println!("{}: FAILED open or read", &file_to_check);
                 }
                 bad_file_paths.push(file_to_check.to_string());
@@ -101,7 +101,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
     }
 
     if no_matches > 0 {
-        if !s {
+        if !args.status {
             eprintln!(
                 "{}: WARNING: {} computed checksum{} did NOT match",
                 Args::command().get_name(),
@@ -114,14 +114,14 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
     }
 
     if bad_lines == cs_line_count {
-        if !s {
+        if !args.status {
             eprintln!(
                 "{}: {}: no properly formatted checksum lines found",
                 Args::command().get_name(),
                 file,
             );
         }
-    } else if bad_lines > 0 && !s {
+    } else if bad_lines > 0 && !args.status {
         eprintln!(
             "{}: WARNING: {} line{} improperly formatted",
             Args::command().get_name(),
@@ -132,7 +132,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
 
     if !bad_file_paths.is_empty() {
         for file in bad_file_paths.iter() {
-            if !s {
+            if !args.status {
                 eprintln!(
                     "{}: {}: No such file or directory",
                     Args::command().get_name(),
@@ -141,7 +141,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
             }
         }
 
-        if !s {
+        if !args.status {
             eprintln!(
                 "{}: WARNING: {} listed file{} could not be read",
                 Args::command().get_name(),
@@ -156,24 +156,24 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, q: bool, s: bool) -> i32 {
     ret
 }
 
-fn process_files(files: Vec<String>, b: bool, c: bool, q: bool, s: bool) -> i32 {
+fn process_files(args: &Args) -> i32 {
     let mut ret = 0;
-    for file in files {
+    for file in &args.files {
         if file == "-" {
-            process_stdin(c, q, s);
+            process_stdin(args);
         } else {
-            match fs::read(&file) {
+            match fs::read(file) {
                 Ok(bytes) => {
-                    if c {
-                        if print_file_checks(bytes, &file, q, s) > 0 {
+                    if args.check {
+                        if print_file_checks(bytes, file, args) > 0 {
                             ret = 1;
                         }
                     } else {
-                        print_file_hash(bytes, b, &file, s);
+                        print_file_hash(bytes, file, args);
                     }
                 }
                 Err(_) => {
-                    if !s {
+                    if !args.status {
                         eprintln!(
                             "{}: {}: No such file or directory",
                             Args::command().get_name(),
@@ -190,12 +190,10 @@ fn process_files(files: Vec<String>, b: bool, c: bool, q: bool, s: bool) -> i32 
 }
 
 fn main() {
-    let args = Args::parse();
+    let mut args = Args::parse();
+    if args.files.is_empty() {
+        args.files.push("-".to_string());
+    }
 
-    let code = match args.files.is_empty() {
-        true => process_stdin(args.check, args.quiet, args.status),
-        false => process_files(args.files, args.binary, args.check, args.quiet, args.status),
-    };
-
-    std::process::exit(code);
+    std::process::exit(process_files(&args));
 }
