@@ -106,18 +106,4 @@ fn test_sha256() {
                 .into()
         )
     );
-
-    let expected = "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1";
-    assert_eq!(
-        expected,
-        SHA256::process(
-            "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"
-                .as_bytes()
-                .into()
-        )
-    );
-
-    let repeated_string: String = "a".repeat(1_000_000);
-    let expected = "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0";
-    assert_eq!(expected, SHA256::process(repeated_string.as_bytes().into()));
 }

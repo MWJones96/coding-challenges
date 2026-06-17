@@ -107,21 +107,13 @@ impl ComputeHash for MD5 {
             dd += d;
         }
 
-        let mut builder = String::new();
-        for byte in aa.to_le_bytes() {
-            builder.push_str(&format!("{:02x}", byte));
-        }
-        for byte in bb.to_le_bytes() {
-            builder.push_str(&format!("{:02x}", byte));
-        }
-        for byte in cc.to_le_bytes() {
-            builder.push_str(&format!("{:02x}", byte));
-        }
-        for byte in dd.to_le_bytes() {
-            builder.push_str(&format!("{:02x}", byte));
-        }
-
-        builder
+            format!(
+    "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+    aa.to_le_bytes()[0], aa.to_le_bytes()[1], aa.to_le_bytes()[2], aa.to_le_bytes()[3],
+    bb.to_le_bytes()[0], bb.to_le_bytes()[1], bb.to_le_bytes()[2], bb.to_le_bytes()[3],
+    cc.to_le_bytes()[0], cc.to_le_bytes()[1], cc.to_le_bytes()[2], cc.to_le_bytes()[3],
+    dd.to_le_bytes()[0], dd.to_le_bytes()[1], dd.to_le_bytes()[2], dd.to_le_bytes()[3]
+)
     }
 }
 
