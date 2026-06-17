@@ -1,18 +1,6 @@
-use bitvec::{array::BitArray, field::BitField, order::Msb0, vec::BitVec};
+use bitvec::field::BitField;
 
-use crate::process::ComputeHash;
-
-pub struct MD5;
-
-fn get_bits_from_bytes(bytes: Vec<u8>) -> BitVec<u8, Msb0> {
-    bytes
-        .iter()
-        .flat_map(|&byte| {
-            let bits = BitArray::<[u8; 1], Msb0>::new([byte]);
-            bits.into_iter().collect::<Vec<bool>>()
-        })
-        .collect()
-}
+use crate::process::{ComputeHash, padding::Endian};
 
 #[rustfmt::skip]
 const SINE_TABLE: [u32; 64] = [
@@ -77,16 +65,18 @@ fn update<F: Fn(u32, u32, u32) -> u32>(registers: [u32; 4], x: u32, s: u8, t: u3
     b + l_rotate(a + f(b, c, d) + x + t, s)
 }
 
+pub struct MD5;
 impl ComputeHash for MD5 {
+    #[rustfmt::skip]
     fn process(msg: Vec<u8>) -> String {
         let mut aa: u32 = 0x67452301;
         let mut bb: u32 = 0xefcdab89;
         let mut cc: u32 = 0x98badcfe;
         let mut dd: u32 = 0x10325476;
 
-        let mut msg = get_bits_from_bytes(msg);
+        let mut msg = super::get_bits_from_bytes(msg);
 
-        super::padding::add_padding(&mut msg);
+        super::padding::add_padding(&mut msg, Endian::Little);
 
         for chunk in msg.chunks(512) {
             let x: Vec<u32> = chunk
@@ -104,34 +94,10 @@ impl ComputeHash for MD5 {
                 for j in 0..4 {
                     let idx: usize = i * 16 + j * 4;
 
-                    a = update(
-                        [a, b, c, d],
-                        x[INDEX_TABLE[idx]],
-                        SHIFT_TABLE[idx],
-                        SINE_TABLE[idx],
-                        op,
-                    );
-                    d = update(
-                        [d, a, b, c],
-                        x[INDEX_TABLE[idx + 1]],
-                        SHIFT_TABLE[idx + 1],
-                        SINE_TABLE[idx + 1],
-                        op,
-                    );
-                    c = update(
-                        [c, d, a, b],
-                        x[INDEX_TABLE[idx + 2]],
-                        SHIFT_TABLE[idx + 2],
-                        SINE_TABLE[idx + 2],
-                        op,
-                    );
-                    b = update(
-                        [b, c, d, a],
-                        x[INDEX_TABLE[idx + 3]],
-                        SHIFT_TABLE[idx + 3],
-                        SINE_TABLE[idx + 3],
-                        op,
-                    );
+                    a = update([a, b, c, d], x[INDEX_TABLE[idx]], SHIFT_TABLE[idx], SINE_TABLE[idx], op);
+                    d = update([d, a, b, c], x[INDEX_TABLE[idx + 1]], SHIFT_TABLE[idx + 1], SINE_TABLE[idx + 1], op);
+                    c = update([c, d, a, b], x[INDEX_TABLE[idx + 2]], SHIFT_TABLE[idx + 2], SINE_TABLE[idx + 2], op);
+                    b = update([b, c, d, a], x[INDEX_TABLE[idx + 3]], SHIFT_TABLE[idx + 3], SINE_TABLE[idx + 3], op);
                 }
             }
 
@@ -160,7 +126,7 @@ impl ComputeHash for MD5 {
 }
 
 #[test]
-fn test_process() {
+fn test_md5() {
     let expected = "d41d8cd98f00b204e9800998ecf8427e";
     let output = MD5::process("".into());
     assert_eq!(expected, output);
