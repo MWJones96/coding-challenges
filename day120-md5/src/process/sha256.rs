@@ -20,14 +20,10 @@ const K: [u32; 64] = [
 pub struct SHA256;
 impl ComputeHash for SHA256 {
     fn process(msg: Vec<u8>) -> String {
-        let mut h0: u32 = 0x6a09e667;
-        let mut h1: u32 = 0xbb67ae85;
-        let mut h2: u32 = 0x3c6ef372;
-        let mut h3: u32 = 0xa54ff53a;
-        let mut h4: u32 = 0x510e527f;
-        let mut h5: u32 = 0x9b05688c;
-        let mut h6: u32 = 0x1f83d9ab;
-        let mut h7: u32 = 0x5be0cd19;
+        let mut h_: [u32; 8] = [
+            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+            0x5be0cd19,
+        ];
 
         let mut msg = get_bits_from_bytes(msg);
         add_padding(&mut msg, Endian::Big);
@@ -45,14 +41,7 @@ impl ComputeHash for SHA256 {
                 w[i] = w[i - 16] + s0 + w[i - 7] + s1;
             }
 
-            let mut a = h0;
-            let mut b = h1;
-            let mut c = h2;
-            let mut d = h3;
-            let mut e = h4;
-            let mut f = h5;
-            let mut g = h6;
-            let mut h = h7;
+            let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = h_;
 
             for i in 0..64 {
                 let s1 = (e.rotate_right(6)) ^ (e.rotate_right(11)) ^ (e.rotate_right(25));
@@ -62,29 +51,17 @@ impl ComputeHash for SHA256 {
                 let maj = (a & b) ^ (a & c) ^ (b & c);
                 let temp2 = s0 + maj;
 
-                h = g;
-                g = f;
-                f = e;
-                e = d + temp1;
-                d = c;
-                c = b;
-                b = a;
-                a = temp1 + temp2;
+                (a, b, c, d, e, f, g, h) = (temp1 + temp2, a, b, c, d + temp1, e, f, g);
             }
 
-            h0 += a;
-            h1 += b;
-            h2 += c;
-            h3 += d;
-            h4 += e;
-            h5 += f;
-            h6 += g;
-            h7 += h;
+            h_.iter_mut()
+                .zip([a, b, c, d, e, f, g, h])
+                .for_each(|(h, val)| *h += val);
         }
 
         format!(
             "{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}",
-            h0, h1, h2, h3, h4, h5, h6, h7
+            h_[0], h_[1], h_[2], h_[3], h_[4], h_[5], h_[6], h_[7]
         )
     }
 }
