@@ -51,23 +51,13 @@ fn i(x: u32, y: u32, z: u32) -> u32 {
 }
 
 #[inline]
-fn l_rotate(bits: u32, amt: u8) -> u32 {
-    let bits64: u64 = (bits as u64) << amt;
-    let upper = (bits64 >> 32) as u32;
-    let lower = bits64 as u32;
-
-    upper | lower
-}
-
-#[inline]
 fn update<F: Fn(u32, u32, u32) -> u32>(registers: [u32; 4], x: u32, s: u8, t: u32, f: F) -> u32 {
     let [a, b, c, d] = registers;
-    b + l_rotate(a + f(b, c, d) + x + t, s)
+    b + (a + f(b, c, d) + x + t).rotate_left(s as u32)
 }
 
 pub struct MD5;
 impl ComputeHash for MD5 {
-    #[rustfmt::skip]
     fn process(msg: Vec<u8>) -> String {
         let mut aa: u32 = 0x67452301;
         let mut bb: u32 = 0xefcdab89;
@@ -93,11 +83,19 @@ impl ComputeHash for MD5 {
             for (i, op) in [f, g, h, i].iter().enumerate() {
                 for j in 0..4 {
                     let idx: usize = i * 16 + j * 4;
+                    let x_i = [
+                        x[INDEX_TABLE[idx]],
+                        x[INDEX_TABLE[idx + 1]],
+                        x[INDEX_TABLE[idx + 2]],
+                        x[INDEX_TABLE[idx + 3]],
+                    ];
+                    let sh_i = &SHIFT_TABLE[idx..idx + 4];
+                    let si_i = &SINE_TABLE[idx..idx + 4];
 
-                    a = update([a, b, c, d], x[INDEX_TABLE[idx]], SHIFT_TABLE[idx], SINE_TABLE[idx], op);
-                    d = update([d, a, b, c], x[INDEX_TABLE[idx + 1]], SHIFT_TABLE[idx + 1], SINE_TABLE[idx + 1], op);
-                    c = update([c, d, a, b], x[INDEX_TABLE[idx + 2]], SHIFT_TABLE[idx + 2], SINE_TABLE[idx + 2], op);
-                    b = update([b, c, d, a], x[INDEX_TABLE[idx + 3]], SHIFT_TABLE[idx + 3], SINE_TABLE[idx + 3], op);
+                    a = update([a, b, c, d], x_i[0], sh_i[0], si_i[0], op);
+                    d = update([d, a, b, c], x_i[1], sh_i[1], si_i[1], op);
+                    c = update([c, d, a, b], x_i[2], sh_i[2], si_i[2], op);
+                    b = update([b, c, d, a], x_i[3], sh_i[3], si_i[3], op);
                 }
             }
 
