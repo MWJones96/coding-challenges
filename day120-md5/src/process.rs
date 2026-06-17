@@ -2,6 +2,7 @@ use bitvec::{array::BitArray, order::Msb0, vec::BitVec};
 
 pub mod md5;
 pub mod padding;
+pub mod sha1;
 pub mod sha256;
 
 pub trait ComputeHash {
