@@ -99,7 +99,11 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
 
         match fs::read(file_to_check) {
             Ok(bytes) => {
-                let output = MD5::process(bytes);
+                let output = match args.algorithm {
+                    Algorithm::MD5 => MD5::process(bytes),
+                    Algorithm::SHA256 => SHA256::process(bytes),
+                };
+
                 if output == precomputed_hash {
                     if !args.quiet && !args.status {
                         println!("{}: OK", &file_to_check);
