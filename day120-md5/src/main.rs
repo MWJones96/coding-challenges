@@ -3,12 +3,18 @@ use std::{
     io::{self, Read},
 };
 
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
 use regex::Regex;
 
-use crate::process::{ComputeHash, md5::MD5};
+use crate::process::{ComputeHash, md5::MD5, sha256::SHA256};
 
 mod process;
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Algorithm {
+    MD5,
+    SHA256,
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -27,6 +33,9 @@ struct Args {
 
     #[arg(long)]
     status: bool,
+
+    #[arg(short, long, value_enum, default_value_t = Algorithm::MD5)]
+    algorithm: Algorithm,
 }
 
 fn process_stdin(args: &Args) -> i32 {
@@ -38,7 +47,11 @@ fn process_stdin(args: &Args) -> i32 {
         let code = print_file_checks(buffer, "-", args);
         ret = ret.max(code);
     } else {
-        let output = MD5::process(buffer);
+        let output = match args.algorithm {
+            Algorithm::MD5 => MD5::process(buffer),
+            Algorithm::SHA256 => SHA256::process(buffer),
+        };
+
         if !args.status {
             println!("{}  -", output);
         }
@@ -52,7 +65,11 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
         true => "*",
         false => " ",
     };
-    let output = MD5::process(bytes);
+    let output = match args.algorithm {
+        Algorithm::MD5 => MD5::process(bytes),
+        Algorithm::SHA256 => SHA256::process(bytes),
+    };
+
     if !args.status {
         println!("{} {}{}", output, mark, file);
     }

@@ -288,3 +288,24 @@ fn test_md5_status_flag() {
     .stdout("")
     .stderr("");
 }
+
+#[test]
+fn test_sha256_on_stdin() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.write_stdin("")
+        .args(["-a", "sha256"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -\n",
+        ));
+}
+
+#[test]
+fn test_sha256_on_file() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-a", "sha256", "tests/fixtures/test_file.txt"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("8ff0a1d9d8d2d2831fc702e54739bc0711d2059fefd8c269415be1eaa2f2df2c  tests/fixtures/test_file.txt\n"));
+}
