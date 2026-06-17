@@ -107,13 +107,11 @@ impl ComputeHash for MD5 {
             dd += d;
         }
 
-            format!(
-    "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-    aa.to_le_bytes()[0], aa.to_le_bytes()[1], aa.to_le_bytes()[2], aa.to_le_bytes()[3],
-    bb.to_le_bytes()[0], bb.to_le_bytes()[1], bb.to_le_bytes()[2], bb.to_le_bytes()[3],
-    cc.to_le_bytes()[0], cc.to_le_bytes()[1], cc.to_le_bytes()[2], cc.to_le_bytes()[3],
-    dd.to_le_bytes()[0], dd.to_le_bytes()[1], dd.to_le_bytes()[2], dd.to_le_bytes()[3]
-)
+        [aa, bb, cc, dd]
+            .iter()
+            .flat_map(|val| val.to_le_bytes())
+            .map(|byte| format!("{:02x}", byte))
+            .collect()
     }
 }
 
