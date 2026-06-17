@@ -1,10 +1,8 @@
-use std::fmt::format;
-
 use bitvec::field::BitField;
 
 use crate::process::{
     ComputeHash, get_bits_from_bytes,
-    padding::{self, Endian, add_padding},
+    padding::{Endian, add_padding},
 };
 
 pub struct SHA1;
@@ -75,4 +73,24 @@ impl ComputeHash for SHA1 {
 fn test_sha1() {
     let expected = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
     assert_eq!(expected, SHA1::process("".as_bytes().into()));
+
+    let expected = "2fd4e1c67a2d28fced849ee1bb76e7391b93eb12";
+    assert_eq!(
+        expected,
+        SHA1::process(
+            "The quick brown fox jumps over the lazy dog"
+                .as_bytes()
+                .into()
+        )
+    );
+
+    let expected = "de9f2c7fd25e1b3afad3e85a0bd17d9b100db4b3";
+    assert_eq!(
+        expected,
+        SHA1::process(
+            "The quick brown fox jumps over the lazy cog"
+                .as_bytes()
+                .into()
+        )
+    );
 }

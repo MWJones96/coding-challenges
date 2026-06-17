@@ -6,7 +6,7 @@ use std::{
 use clap::{CommandFactory, Parser, ValueEnum};
 use regex::Regex;
 
-use crate::process::{ComputeHash, md5::MD5, sha256::SHA256};
+use crate::process::{ComputeHash, md5::MD5, sha1::SHA1, sha256::SHA256};
 
 mod process;
 
@@ -14,6 +14,7 @@ mod process;
 enum Algorithm {
     MD5,
     SHA256,
+    SHA1,
 }
 
 #[derive(Parser, Debug)]
@@ -50,6 +51,7 @@ fn process_stdin(args: &Args) -> i32 {
         let output = match args.algorithm {
             Algorithm::MD5 => MD5::process(buffer),
             Algorithm::SHA256 => SHA256::process(buffer),
+            Algorithm::SHA1 => SHA1::process(buffer),
         };
 
         if !args.status {
@@ -68,6 +70,7 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     let output = match args.algorithm {
         Algorithm::MD5 => MD5::process(bytes),
         Algorithm::SHA256 => SHA256::process(bytes),
+        Algorithm::SHA1 => SHA1::process(bytes),
     };
 
     if !args.status {
@@ -102,6 +105,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
                 let output = match args.algorithm {
                     Algorithm::MD5 => MD5::process(bytes),
                     Algorithm::SHA256 => SHA256::process(bytes),
+                    Algorithm::SHA1 => SHA1::process(bytes),
                 };
 
                 if output == precomputed_hash {
