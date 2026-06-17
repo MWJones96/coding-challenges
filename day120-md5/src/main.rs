@@ -35,7 +35,8 @@ fn process_stdin(args: &Args) -> i32 {
     io::stdin().read_to_end(&mut buffer).unwrap();
 
     if args.check {
-        ret = print_file_checks(buffer, "-", args);
+        let code = print_file_checks(buffer, "-", args);
+        ret = ret.max(code);
     } else {
         let output = MD5::process(buffer);
         if !args.status {
@@ -46,7 +47,7 @@ fn process_stdin(args: &Args) -> i32 {
     ret
 }
 
-fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) {
+fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     let mark = match args.binary {
         true => "*",
         false => " ",
@@ -55,6 +56,8 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) {
     if !args.status {
         println!("{} {}{}", output, mark, file);
     }
+
+    0
 }
 
 fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
@@ -110,7 +113,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
             );
         }
 
-        ret = 1;
+        ret = ret.max(1);
     }
 
     if bad_lines == cs_line_count {
@@ -150,7 +153,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
             );
         }
 
-        ret = 1;
+        ret = ret.max(1);
     }
 
     ret
@@ -159,17 +162,14 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
 fn process_files(args: &Args) -> i32 {
     let mut ret = 0;
     for file in &args.files {
-        if file == "-" {
-            process_stdin(args);
-        } else {
-            match fs::read(file) {
+        let code = match file.as_str() {
+            "-" => process_stdin(args),
+            _ => match fs::read(file) {
                 Ok(bytes) => {
                     if args.check {
-                        if print_file_checks(bytes, file, args) > 0 {
-                            ret = 1;
-                        }
+                        print_file_checks(bytes, file, args)
                     } else {
-                        print_file_hash(bytes, file, args);
+                        print_file_hash(bytes, file, args)
                     }
                 }
                 Err(_) => {
@@ -180,10 +180,12 @@ fn process_files(args: &Args) -> i32 {
                             &file
                         );
                     }
-                    ret = 1;
+
+                    1
                 }
-            }
-        }
+            },
+        };
+        ret = ret.max(code);
     }
 
     ret
