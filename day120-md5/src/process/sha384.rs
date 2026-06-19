@@ -1,3 +1,4 @@
+
 use bitvec::field::BitField;
 
 use crate::{
@@ -27,13 +28,12 @@ const K: [u64; 80] = [
     0x431d67c49c100d4c, 0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817
 ];
 
-pub struct SHA512;
-impl ComputeHash for SHA512 {
+pub struct SHA384;
+impl ComputeHash for SHA384 {
     fn process(msg: Vec<u8>) -> String {
         #[rustfmt::skip]
-        let mut h_: [u64; 8] = [
-            0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-            0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
+        let mut h_: [u64; 8] = [0xcbbb9d5dc1059ed8, 0x629a292a367cd507, 0x9159015a3070dd17, 0x152fecd8f70e5939,
+            0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4
         ];
 
         let mut msg = get_bits_from_bytes(msg);
@@ -90,29 +90,21 @@ impl ComputeHash for SHA512 {
         }
 
         format!(
-            "{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}",
-            h_[0], h_[1], h_[2], h_[3], h_[4], h_[5], h_[6], h_[7]
+            "{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}",
+            h_[0], h_[1], h_[2], h_[3], h_[4], h_[5]
         )
     }
 }
 
 #[test]
-fn test_sha512() {
-    let expected = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
-    assert_eq!(expected, SHA512::process("".as_bytes().into()));
+fn test_sha384() {
+    let expected = "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b";
+    assert_eq!(expected, SHA384::process("".as_bytes().into()));
 
-    let expected = "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f";
-    assert_eq!(expected, SHA512::process("abc".as_bytes().into()));
+    let expected = "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7";
+    assert_eq!(expected, SHA384::process("abc".as_bytes().into()));
 
-    let expected = "839e2406db5ab261c3a88937225f655eddcbe54c705e5809a8cdfa85339f3bec55c4d829634d5beaabd84eb89f594b9698758329412ddfbcda38898ef6869a68";
-    assert_eq!(
-        expected,
-        SHA512::process("sha512 is pretty neat!".as_bytes().into())
-    );
+    let expected = "a0b3af438887bc2c87f1a9bf6371d9d0e69f217264ca286531e306ab88b2ea3de480ba47968fb2754491ec9d0d3ee7c1";
+    assert_eq!(expected, SHA384::process("sha 384 is not as cool".as_bytes().into()));
 
-    let expected = "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909";
-    assert_eq!(
-        expected,
-        SHA512::process("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu".as_bytes().into())
-    );
 }
