@@ -1,6 +1,11 @@
-use crate::process::{
-    ComputeHash, get_bits_from_bytes,
-    padding::{Endian, add_padding},
+use bitvec::field::BitField;
+
+use crate::{
+    print_file_hash,
+    process::{
+        ComputeHash, get_bits_from_bytes,
+        padding::{Endian, add_padding, add_padding_1024},
+    },
 };
 
 #[rustfmt::skip]
@@ -33,18 +38,82 @@ impl ComputeHash for SHA512 {
         ];
 
         let mut msg = get_bits_from_bytes(msg);
-        add_padding(&mut msg, Endian::Big);
-        for chunk in msg.chunks(1024) {}
+        add_padding_1024(&mut msg);
+        for chunk in msg.chunks(1024) {
+            let mut w: [u64; 80] = [0; 80];
+            for (i, chunk_i) in chunk.chunks(64).enumerate() {
+                w[i] = chunk_i.load_be::<u64>();
+            }
+
+            for i in 16..80 {
+                let s0: u64 =
+                    (w[i - 15].rotate_right(1)) ^ (w[i - 15].rotate_right(8)) ^ (w[i - 15] >> 7);
+                let s1: u64 =
+                    (w[i - 2].rotate_right(19)) ^ (w[i - 2].rotate_right(61)) ^ (w[i - 2] >> 6);
+                w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+            }
+
+            let mut a: u64 = h_[0];
+            let mut b: u64 = h_[1];
+            let mut c: u64 = h_[2];
+            let mut d: u64 = h_[3];
+            let mut e: u64 = h_[4];
+            let mut f: u64 = h_[5];
+            let mut g: u64 = h_[6];
+            let mut h: u64 = h_[7];
+
+            for i in 0..80 {
+                let S1: u64 = (e.rotate_right(14)) ^ (e.rotate_right(18)) ^ (e.rotate_right(41));
+                let ch: u64 = (e & f) ^ (!e & g);
+                let temp1: u64 = h + S1 + ch + K[i] + w[i];
+                let S0: u64 = (a.rotate_right(28)) ^ (a.rotate_right(34)) ^ (a.rotate_right(39));
+                let maj: u64 = (a & b) ^ (a & c) ^ (b & c);
+                let temp2: u64 = S0 + maj;
+
+                h = g;
+                g = f;
+                f = e;
+                e = d + temp1;
+                d = c;
+                c = b;
+                b = a;
+                a = temp1 + temp2;
+            }
+
+            h_[0] += a;
+            h_[1] += b;
+            h_[2] += c;
+            h_[3] += d;
+            h_[4] += e;
+            h_[5] += f;
+            h_[6] += g;
+            h_[7] += h;
+        }
 
         format!(
-            "{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}",
+            "{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}{:016x}",
             h_[0], h_[1], h_[2], h_[3], h_[4], h_[5], h_[6], h_[7]
         )
     }
 }
 
 #[test]
-fn test_sha256() {
+fn test_sha512() {
     let expected = "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e";
     assert_eq!(expected, SHA512::process("".as_bytes().into()));
+
+    let expected = "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f";
+    assert_eq!(expected, SHA512::process("abc".as_bytes().into()));
+
+    let expected = "839e2406db5ab261c3a88937225f655eddcbe54c705e5809a8cdfa85339f3bec55c4d829634d5beaabd84eb89f594b9698758329412ddfbcda38898ef6869a68";
+    assert_eq!(
+        expected,
+        SHA512::process("sha512 is pretty neat!".as_bytes().into())
+    );
+
+    let expected = "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909";
+    assert_eq!(
+        expected,
+        SHA512::process("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu".as_bytes().into())
+    );
 }
