@@ -439,3 +439,50 @@ fn test_sha512_checksum_on_sha512_hashes() {
             tests/fixtures/test_file2.txt: OK\n",
         ));
 }
+
+#[test]
+fn test_sha384_on_stdin() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.write_stdin("")
+        .args(["-a", "sha384"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b  -\n"));
+}
+
+#[test]
+fn test_sha384_on_file() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-a", "sha384", "tests/fixtures/test_file.txt"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("36c4d4659e9d8bac70d263622f13150cba3064336b941d198b9e5174850ef4c9a6394fca690eaadd36f4072ccdcb3a84  tests/fixtures/test_file.txt\n"));
+}
+
+#[test]
+fn test_sha384_checksum_on_md5_hashes() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-a", "sha384", "-c", "tests/fixtures/checksums.txt"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(predicate::eq(
+            "tests/fixtures/test_file.txt: FAILED\n\
+            tests/fixtures/test_file2.txt: FAILED\n",
+        ))
+        .stderr(predicate::eq(
+            "day120-md5: WARNING: 2 computed checksums did NOT match\n",
+        ));
+}
+
+#[test]
+fn test_sha384_checksum_on_sha384_hashes() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.args(["-a", "sha384", "-c", "tests/fixtures/checksums_sha384.txt"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "tests/fixtures/test_file.txt: OK\n\
+            tests/fixtures/test_file2.txt: OK\n",
+        ));
+}

@@ -6,7 +6,9 @@ use std::{
 use clap::{CommandFactory, Parser, ValueEnum};
 use regex::Regex;
 
-use crate::process::{ComputeHash, md5::MD5, sha1::SHA1, sha256::SHA256, sha512::SHA512};
+use crate::process::{
+    ComputeHash, md5::MD5, sha1::SHA1, sha256::SHA256, sha384::SHA384, sha512::SHA512,
+};
 
 mod process;
 
@@ -16,6 +18,7 @@ enum Algorithm {
     SHA256,
     SHA1,
     SHA512,
+    SHA384,
 }
 
 #[derive(Parser, Debug)]
@@ -54,6 +57,7 @@ fn process_stdin(args: &Args) -> i32 {
             Algorithm::SHA256 => SHA256::process(buffer),
             Algorithm::SHA1 => SHA1::process(buffer),
             Algorithm::SHA512 => SHA512::process(buffer),
+            Algorithm::SHA384 => SHA384::process(buffer),
         };
 
         if !args.status {
@@ -74,6 +78,7 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
         Algorithm::SHA256 => SHA256::process(bytes),
         Algorithm::SHA1 => SHA1::process(bytes),
         Algorithm::SHA512 => SHA512::process(bytes),
+        Algorithm::SHA384 => SHA384::process(bytes),
     };
 
     if !args.status {
@@ -110,6 +115,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
                     Algorithm::SHA256 => SHA256::process(bytes),
                     Algorithm::SHA1 => SHA1::process(bytes),
                     Algorithm::SHA512 => SHA512::process(bytes),
+                    Algorithm::SHA384 => SHA384::process(bytes),
                 };
 
                 if output == precomputed_hash {
