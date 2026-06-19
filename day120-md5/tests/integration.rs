@@ -486,3 +486,15 @@ fn test_sha384_checksum_on_sha384_hashes() {
             tests/fixtures/test_file2.txt: OK\n",
         ));
 }
+
+#[test]
+fn test_md5_tag_flag_using_stdin() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.write_stdin("")
+        .args(["--tag"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "MD5 (-) = d41d8cd98f00b204e9800998ecf8427e\n",
+        ));
+}

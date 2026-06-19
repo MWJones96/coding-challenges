@@ -41,6 +41,9 @@ struct Args {
 
     #[arg(short, long, value_enum, default_value_t = Algorithm::MD5)]
     algorithm: Algorithm,
+
+    #[arg(long)]
+    tag: bool,
 }
 
 fn process_stdin(args: &Args) -> i32 {
@@ -52,17 +55,7 @@ fn process_stdin(args: &Args) -> i32 {
         let code = print_file_checks(buffer, "-", args);
         ret = ret.max(code);
     } else {
-        let output = match args.algorithm {
-            Algorithm::MD5 => MD5::process(buffer),
-            Algorithm::SHA256 => SHA256::process(buffer),
-            Algorithm::SHA1 => SHA1::process(buffer),
-            Algorithm::SHA512 => SHA512::process(buffer),
-            Algorithm::SHA384 => SHA384::process(buffer),
-        };
-
-        if !args.status {
-            println!("{}  -", output);
-        }
+        print_file_hash(buffer, "-", args);
     }
 
     ret
@@ -82,7 +75,11 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     };
 
     if !args.status {
-        println!("{} {}{}", output, mark, file);
+        if !args.tag {
+            println!("{} {}{}", output, mark, file);
+        } else {
+            println!("MD5 ({}) = {}", file, output);
+        }
     }
 
     0
