@@ -6,7 +6,7 @@ pub enum Endian {
 }
 
 pub fn add_padding(vec: &mut BitVec<u8, Msb0>, endianness: Endian) {
-    let orin_len: u64 = vec.len() as u64;
+    let orig_len: u64 = vec.len() as u64;
 
     vec.push(true);
     while vec.len() % 512 != 448 {
@@ -14,9 +14,20 @@ pub fn add_padding(vec: &mut BitVec<u8, Msb0>, endianness: Endian) {
     }
 
     match endianness {
-        Endian::Little => vec.extend_from_bitslice(orin_len.to_le_bytes().view_bits::<Msb0>()),
-        Endian::Big => vec.extend_from_bitslice(orin_len.to_be_bytes().view_bits::<Msb0>()),
+        Endian::Little => vec.extend_from_bitslice(orig_len.to_le_bytes().view_bits::<Msb0>()),
+        Endian::Big => vec.extend_from_bitslice(orig_len.to_be_bytes().view_bits::<Msb0>()),
     }
+}
+
+pub fn add_padding_1024(vec: &mut BitVec<u8, Msb0>) {
+    let orig_len: u128 = vec.len() as u128;
+
+    vec.push(true);
+    while vec.len() % 1024 != 1024 - 128 {
+        vec.push(false);
+    }
+
+    vec.extend_from_bitslice(orig_len.to_be_bytes().view_bits::<Msb0>());
 }
 
 #[test]
@@ -84,7 +95,7 @@ fn test_448_bit_message() {
 }
 
 #[test]
-fn test_padd_message_big_endian_length() {
+fn test_pad_message_big_endian_length() {
     let mut input = bitvec![u8, Msb0; 1; 448];
 
     assert_eq!(448, input.len());
@@ -97,4 +108,68 @@ fn test_padd_message_big_endian_length() {
     let orig_len: u64 = input[len - 64..].load_be::<u64>();
 
     assert_eq!(448, orig_len);
+}
+
+#[test]
+fn test_zero_bit_message_pad_1024() {
+    let mut input = BitVec::new();
+
+    assert_eq!(0, input.len());
+
+    add_padding_1024(&mut input);
+
+    assert_eq!(1024, input.len());
+
+    let len = input.len();
+    let orig_len: u128 = input[len - 128..].load_be::<u128>();
+
+    assert_eq!(0, orig_len);
+}
+
+#[test]
+fn test_one_bit_message_pad_1024() {
+    let mut input = bitvec![u8, Msb0; 1; 1];
+
+    assert_eq!(1, input.len());
+
+    add_padding_1024(&mut input);
+
+    assert_eq!(1024, input.len());
+
+    let len = input.len();
+    let orig_len: u128 = input[len - 128..].load_be::<u128>();
+
+    assert_eq!(1, orig_len);
+}
+
+#[test]
+fn test_895_bit_message_pad_1024() {
+    let mut input = bitvec![u8, Msb0; 1; 895];
+
+    assert_eq!(895, input.len());
+
+    add_padding_1024(&mut input);
+
+    assert_eq!(1024, input.len());
+
+    let len = input.len();
+    let orig_len: u128 = input[len - 128..].load_be::<u128>();
+
+    assert_eq!(895, orig_len);
+}
+
+#[test]
+fn test_896_bit_message_pad_1024() {
+    let mut input = bitvec![u8, Msb0; 1; 896];
+
+    assert_eq!(896, input.len());
+
+    add_padding_1024(&mut input);
+
+    assert_eq!(2048, input.len());
+
+    let len = input.len();
+    let orig_len: u128 = input[len - 128..].load_be::<u128>();
+
+    assert_eq!(896, orig_len);
 }
