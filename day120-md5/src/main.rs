@@ -151,21 +151,21 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
         ret = ret.max(1);
     }
 
-    if bad_lines == cs_line_count {
-        if !args.status {
+    if bad_lines > 0 && !args.status {
+        if bad_lines == cs_line_count {
             eprintln!(
                 "{}: {}: no properly formatted checksum lines found",
                 Args::command().get_name(),
                 file,
             );
+        } else {
+            eprintln!(
+                "{}: WARNING: {} line{} improperly formatted",
+                Args::command().get_name(),
+                bad_lines,
+                if bad_lines > 1 { "s are" } else { " is" }
+            );
         }
-    } else if bad_lines > 0 && !args.status {
-        eprintln!(
-            "{}: WARNING: {} line{} improperly formatted",
-            Args::command().get_name(),
-            bad_lines,
-            if bad_lines > 1 { "s are" } else { " is" }
-        );
     }
 
     if !bad_file_paths.is_empty() {
