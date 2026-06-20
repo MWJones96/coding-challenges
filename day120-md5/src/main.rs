@@ -63,7 +63,7 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     if !args.tag {
         println!("{} {}{}", output, mark, file);
     } else {
-        println!("MD5 ({}) = {}", file, output);
+        println!("{:?} ({}) = {}", args.algorithm, file, output);
     }
 
     0
@@ -164,7 +164,7 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     ret
 }
 
-fn compute_checksums_for_all_files(args: &Args) -> i32 {
+fn compute_checksum_for_all_files(args: &Args) -> i32 {
     let mut ret = 0;
     for file in &args.files {
         let code = match file.as_str() {
@@ -237,7 +237,7 @@ fn main() {
     }
 
     if args.check {
-        std::process::exit(compute_checksums_for_all_files(&args));
+        std::process::exit(compute_checksum_for_all_files(&args));
     } else {
         std::process::exit(compute_hash_for_all_files(&args));
     }
