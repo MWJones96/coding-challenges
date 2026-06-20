@@ -1,6 +1,7 @@
 use std::{
-    fs::{self},
+    fs::{self, File},
     io::{self, Read},
+    os::fd::AsRawFd,
 };
 
 use clap::{CommandFactory, Parser, ValueEnum};
@@ -15,10 +16,10 @@ mod process;
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
 enum Algorithm {
     MD5,
-    SHA256,
     SHA1,
-    SHA512,
+    SHA256,
     SHA384,
+    SHA512,
 }
 
 #[derive(Parser, Debug)]
@@ -39,26 +40,11 @@ struct Args {
     #[arg(long)]
     status: bool,
 
-    #[arg(short, long, value_enum, default_value_t = Algorithm::MD5)]
-    algorithm: Algorithm,
-
     #[arg(long)]
     tag: bool,
-}
 
-fn process_stdin(args: &Args) -> i32 {
-    let mut buffer = Vec::new();
-    let mut ret = 0;
-    io::stdin().read_to_end(&mut buffer).unwrap();
-
-    if args.check {
-        let code = print_file_checks(buffer, "-", args);
-        ret = ret.max(code);
-    } else {
-        print_file_hash(buffer, "-", args);
-    }
-
-    ret
+    #[arg(short, long, value_enum, default_value_t = Algorithm::MD5)]
+    algorithm: Algorithm,
 }
 
 fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
@@ -68,18 +54,16 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     };
     let output = match args.algorithm {
         Algorithm::MD5 => MD5::process(bytes),
-        Algorithm::SHA256 => SHA256::process(bytes),
         Algorithm::SHA1 => SHA1::process(bytes),
-        Algorithm::SHA512 => SHA512::process(bytes),
+        Algorithm::SHA256 => SHA256::process(bytes),
         Algorithm::SHA384 => SHA384::process(bytes),
+        Algorithm::SHA512 => SHA512::process(bytes),
     };
 
-    if !args.status {
-        if !args.tag {
-            println!("{} {}{}", output, mark, file);
-        } else {
-            println!("MD5 ({}) = {}", file, output);
-        }
+    if !args.tag {
+        println!("{} {}{}", output, mark, file);
+    } else {
+        println!("MD5 ({}) = {}", file, output);
     }
 
     0
@@ -109,46 +93,40 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
             Ok(bytes) => {
                 let output = match args.algorithm {
                     Algorithm::MD5 => MD5::process(bytes),
-                    Algorithm::SHA256 => SHA256::process(bytes),
                     Algorithm::SHA1 => SHA1::process(bytes),
-                    Algorithm::SHA512 => SHA512::process(bytes),
+                    Algorithm::SHA256 => SHA256::process(bytes),
                     Algorithm::SHA384 => SHA384::process(bytes),
+                    Algorithm::SHA512 => SHA512::process(bytes),
                 };
 
                 if output == precomputed_hash {
-                    if !args.quiet && !args.status {
+                    if !args.quiet {
                         println!("{}: OK", &file_to_check);
                     }
                 } else {
-                    if !args.status {
-                        println!("{}: FAILED", &file_to_check);
-                    }
+                    println!("{}: FAILED", &file_to_check);
                     no_matches += 1;
                 }
             }
             Err(_) => {
-                if !args.status {
-                    println!("{}: FAILED open or read", &file_to_check);
-                }
+                println!("{}: FAILED open or read", &file_to_check);
                 bad_file_paths.push(file_to_check.to_string());
             }
         }
     }
 
     if no_matches > 0 {
-        if !args.status {
-            eprintln!(
-                "{}: WARNING: {} computed checksum{} did NOT match",
-                Args::command().get_name(),
-                no_matches,
-                if no_matches > 1 { "s" } else { "" }
-            );
-        }
+        eprintln!(
+            "{}: WARNING: {} computed checksum{} did NOT match",
+            Args::command().get_name(),
+            no_matches,
+            if no_matches > 1 { "s" } else { "" }
+        );
 
         ret = ret.max(1);
     }
 
-    if bad_lines > 0 && !args.status {
+    if bad_lines > 0 {
         if bad_lines == cs_line_count {
             eprintln!(
                 "{}: {}: no properly formatted checksum lines found",
@@ -167,23 +145,18 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
 
     if !bad_file_paths.is_empty() {
         for file in bad_file_paths.iter() {
-            if !args.status {
-                eprintln!(
-                    "{}: {}: No such file or directory",
-                    Args::command().get_name(),
-                    &file
-                );
-            }
-        }
-
-        if !args.status {
             eprintln!(
-                "{}: WARNING: {} listed file{} could not be read",
+                "{}: {}: No such file or directory",
                 Args::command().get_name(),
-                bad_file_paths.len(),
-                if bad_file_paths.len() > 1 { "s" } else { "" }
+                &file
             );
         }
+        eprintln!(
+            "{}: WARNING: {} listed file{} could not be read",
+            Args::command().get_name(),
+            bad_file_paths.len(),
+            if bad_file_paths.len() > 1 { "s" } else { "" }
+        );
 
         ret = ret.max(1);
     }
@@ -191,27 +164,51 @@ fn print_file_checks(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
     ret
 }
 
-fn process_files(args: &Args) -> i32 {
+fn compute_checksums_for_all_files(args: &Args) -> i32 {
     let mut ret = 0;
     for file in &args.files {
         let code = match file.as_str() {
-            "-" => process_stdin(args),
+            "-" => {
+                let mut bytes = Vec::new();
+                io::stdin().read_to_end(&mut bytes).unwrap();
+                print_file_checks(bytes, "", args)
+            }
             _ => match fs::read(file) {
-                Ok(bytes) => {
-                    if args.check {
-                        print_file_checks(bytes, file, args)
-                    } else {
-                        print_file_hash(bytes, file, args)
-                    }
-                }
+                Ok(bytes) => print_file_checks(bytes, file, args),
                 Err(_) => {
-                    if !args.status {
-                        eprintln!(
-                            "{}: {}: No such file or directory",
-                            Args::command().get_name(),
-                            &file
-                        );
-                    }
+                    eprintln!(
+                        "{}: {}: No such file or directory",
+                        Args::command().get_name(),
+                        &file
+                    );
+
+                    1
+                }
+            },
+        };
+        ret = ret.max(code);
+    }
+
+    ret
+}
+
+fn compute_hash_for_all_files(args: &Args) -> i32 {
+    let mut ret = 0;
+    for file in &args.files {
+        let code = match file.as_str() {
+            "-" => {
+                let mut bytes = Vec::new();
+                io::stdin().read_to_end(&mut bytes).unwrap();
+                print_file_hash(bytes, "-", args)
+            }
+            _ => match fs::read(file) {
+                Ok(bytes) => print_file_hash(bytes, file, args),
+                Err(_) => {
+                    eprintln!(
+                        "{}: {}: No such file or directory",
+                        Args::command().get_name(),
+                        &file
+                    );
 
                     1
                 }
@@ -225,9 +222,23 @@ fn process_files(args: &Args) -> i32 {
 
 fn main() {
     let mut args = Args::parse();
+    if args.status
+        && let Ok(file) = File::open("/dev/null")
+    {
+        let fd = file.as_raw_fd();
+        unsafe {
+            libc::dup2(fd, 1);
+            libc::dup2(fd, 2);
+        }
+    }
+
     if args.files.is_empty() {
         args.files.push("-".to_string());
     }
 
-    std::process::exit(process_files(&args));
+    if args.check {
+        std::process::exit(compute_checksums_for_all_files(&args));
+    } else {
+        std::process::exit(compute_hash_for_all_files(&args));
+    }
 }
