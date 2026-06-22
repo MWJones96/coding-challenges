@@ -1,6 +1,6 @@
 use bitvec::field::BitField;
 
-use crate::process::{ComputeHash, padding::Endian};
+use crate::process::{self, ComputeHash, HMAC, get_bits_from_bytes, padding::Endian};
 
 #[rustfmt::skip]
 const SINE_TABLE: [u32; 64] = [
@@ -64,7 +64,7 @@ impl ComputeHash for MD5 {
         let mut cc: u32 = 0x98badcfe;
         let mut dd: u32 = 0x10325476;
 
-        let mut msg = super::get_bits_from_bytes(msg);
+        let mut msg = super::get_bits_from_bytes(&msg);
 
         super::padding::add_padding(&mut msg, Endian::Little);
 
@@ -113,6 +113,30 @@ impl ComputeHash for MD5 {
     }
 }
 
+fn pad_key(key: &mut Vec<u8>) {
+    const BLOCK_LEN: usize = 64;
+
+    if key.len() > BLOCK_LEN {
+        *key = MD5::process(key.clone()).into_bytes();
+    } else if key.len() < BLOCK_LEN {
+        while key.len() < BLOCK_LEN {
+            key.push(0);
+        }
+    }
+}
+
+impl HMAC for MD5 {
+    fn process_hmac(msg: Vec<u8>, mut key: Vec<u8>) -> String {
+        pad_key(&mut key);
+        let o_key_pad: Vec<u8> = key.iter().map(|&x| x ^ 0x5c).collect();
+        let i_key_pad: Vec<u8> = key.iter().map(|&x| x ^ 0x36).collect();
+
+        let inner: Vec<u8> =
+            hex::decode(MD5::process([i_key_pad, msg].concat())).expect("Invalid hex string");
+        MD5::process([o_key_pad, inner].concat())
+    }
+}
+
 #[test]
 fn test_md5() {
     let expected = "d41d8cd98f00b204e9800998ecf8427e";
@@ -144,5 +168,16 @@ fn test_md5() {
     let output = MD5::process(
         "12345678901234567890123456789012345678901234567890123456789012345678901234567890".into(),
     );
+    assert_eq!(expected, output);
+}
+
+#[test]
+fn test_md5_hmac() {
+    let expected = "74e6f7298a9c2d168935f58c001bad88";
+    let output = MD5::process_hmac("".into(), "".into());
+    assert_eq!(expected, output);
+
+    let expected = "750c783e6ab0b503eaa86e310a5db738";
+    let output = MD5::process_hmac("what do ya want for nothing?".into(), "Jefe".into());
     assert_eq!(expected, output);
 }

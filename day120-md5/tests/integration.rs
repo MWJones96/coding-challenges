@@ -498,3 +498,14 @@ fn test_md5_tag_flag_using_stdin() {
             "MD5 (-) = d41d8cd98f00b204e9800998ecf8427e\n",
         ));
 }
+
+#[test]
+fn test_hmac_md5() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.write_stdin("")
+        .args(["-a", "md5", "--hmac", "test-key"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("3726c9c0ea1ff6206d840c06ea9416ad  -\n"));
+    //
+}

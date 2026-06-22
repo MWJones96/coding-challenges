@@ -25,7 +25,7 @@ impl ComputeHash for SHA256 {
             0x5be0cd19,
         ];
 
-        let mut msg = get_bits_from_bytes(msg);
+        let mut msg = get_bits_from_bytes(&msg);
         add_padding(&mut msg, Endian::Big);
         for chunk in msg.chunks(512) {
             let mut w: [u32; 64] = [0; 64];

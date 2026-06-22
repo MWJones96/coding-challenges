@@ -8,7 +8,7 @@ use clap::{CommandFactory, Parser, ValueEnum};
 use regex::Regex;
 
 use crate::process::{
-    ComputeHash, md5::MD5, sha1::SHA1, sha256::SHA256, sha384::SHA384, sha512::SHA512,
+    ComputeHash, HMAC, md5::MD5, sha1::SHA1, sha256::SHA256, sha384::SHA384, sha512::SHA512,
 };
 
 mod process;
@@ -43,6 +43,9 @@ struct Args {
     #[arg(long)]
     tag: bool,
 
+    #[arg(long)]
+    hmac: Option<String>,
+
     #[arg(short, long, value_enum, default_value_t = Algorithm::MD5)]
     algorithm: Algorithm,
 }
@@ -53,7 +56,13 @@ fn print_file_hash(bytes: Vec<u8>, file: &str, args: &Args) -> i32 {
         false => " ",
     };
     let output = match args.algorithm {
-        Algorithm::MD5 => MD5::process(bytes),
+        Algorithm::MD5 => {
+            if args.hmac.is_none() {
+                MD5::process(bytes)
+            } else {
+                MD5::process_hmac(bytes, args.hmac.clone().unwrap().into())
+            }
+        }
         Algorithm::SHA1 => SHA1::process(bytes),
         Algorithm::SHA256 => SHA256::process(bytes),
         Algorithm::SHA384 => SHA384::process(bytes),

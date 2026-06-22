@@ -14,7 +14,7 @@ impl ComputeHash for SHA1 {
         let mut h3: u32 = 0x10325476;
         let mut h4: u32 = 0xC3D2E1F0;
 
-        let mut msg = get_bits_from_bytes(msg);
+        let mut msg = get_bits_from_bytes(&msg);
         add_padding(&mut msg, Endian::Big);
 
         for chunk in msg.chunks(512) {

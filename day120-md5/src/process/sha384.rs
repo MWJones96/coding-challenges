@@ -36,7 +36,7 @@ impl ComputeHash for SHA384 {
             0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4
         ];
 
-        let mut msg = get_bits_from_bytes(msg);
+        let mut msg = get_bits_from_bytes(&msg);
         add_padding_1024(&mut msg);
         for chunk in msg.chunks(1024) {
             let mut w: [u64; 80] = [0; 80];

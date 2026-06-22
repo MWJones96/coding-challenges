@@ -36,7 +36,7 @@ impl ComputeHash for SHA512 {
             0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
         ];
 
-        let mut msg = get_bits_from_bytes(msg);
+        let mut msg = get_bits_from_bytes(&msg);
         add_padding_1024(&mut msg);
         for chunk in msg.chunks(1024) {
             let mut w: [u64; 80] = [0; 80];
