@@ -1,7 +1,8 @@
 use bitvec::field::BitField;
 
+use crate::process::Hmac;
 use crate::process::{
-    ComputeHash, get_bits_from_bytes,
+    ComputeHash, get_bits_from_bytes, pad_key,
     padding::{Endian, add_padding},
 };
 
@@ -66,6 +67,18 @@ impl ComputeHash for SHA256 {
     }
 }
 
+impl Hmac for SHA256 {
+    fn process_hmac(msg: Vec<u8>, mut key: Vec<u8>) -> String {
+        pad_key::<SHA256>(&mut key);
+        let o_key_pad: Vec<u8> = key.iter().map(|&x| x ^ 0x5c).collect();
+        let i_key_pad: Vec<u8> = key.iter().map(|&x| x ^ 0x36).collect();
+
+        let inner: Vec<u8> =
+            hex::decode(SHA256::process([i_key_pad, msg].concat())).expect("Invalid hex string");
+        SHA256::process([o_key_pad, inner].concat())
+    }
+}
+
 #[test]
 fn test_sha256() {
     let expected = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -83,4 +96,11 @@ fn test_sha256() {
                 .into()
         )
     );
+}
+
+#[test]
+fn test_sha256_hmac() {
+    let expected = "88cd2108b5347d973cf39cdf9053d7dd42704876d8c9a9bd8e2d168259d3ddf7";
+    let output = SHA256::process_hmac("test".into(), "test".into());
+    assert_eq!(expected, output);
 }

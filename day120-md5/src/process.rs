@@ -12,11 +12,11 @@ pub trait ComputeHash {
     fn process(msg: Vec<u8>) -> String;
 }
 
-pub trait HMAC {
+pub trait Hmac {
     fn process_hmac(msg: Vec<u8>, key: Vec<u8>) -> String;
 }
 
-fn get_bits_from_bytes(bytes: &Vec<u8>) -> BitVec<u8, Msb0> {
+fn get_bits_from_bytes(bytes: &[u8]) -> BitVec<u8, Msb0> {
     bytes
         .iter()
         .flat_map(|&byte| {
@@ -24,4 +24,16 @@ fn get_bits_from_bytes(bytes: &Vec<u8>) -> BitVec<u8, Msb0> {
             bits.into_iter().collect::<Vec<bool>>()
         })
         .collect()
+}
+
+fn pad_key<CH: ComputeHash>(key: &mut Vec<u8>) {
+    const BLOCK_LEN: usize = 64;
+
+    if key.len() > BLOCK_LEN {
+        *key = CH::process(key.clone()).into_bytes();
+    } else if key.len() < BLOCK_LEN {
+        while key.len() < BLOCK_LEN {
+            key.push(0);
+        }
+    }
 }

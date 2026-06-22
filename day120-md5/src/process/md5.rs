@@ -1,6 +1,7 @@
 use bitvec::field::BitField;
 
-use crate::process::{self, ComputeHash, HMAC, get_bits_from_bytes, padding::Endian};
+use crate::process::Hmac;
+use crate::process::{ComputeHash, pad_key, padding::Endian};
 
 #[rustfmt::skip]
 const SINE_TABLE: [u32; 64] = [
@@ -113,21 +114,9 @@ impl ComputeHash for MD5 {
     }
 }
 
-fn pad_key(key: &mut Vec<u8>) {
-    const BLOCK_LEN: usize = 64;
-
-    if key.len() > BLOCK_LEN {
-        *key = MD5::process(key.clone()).into_bytes();
-    } else if key.len() < BLOCK_LEN {
-        while key.len() < BLOCK_LEN {
-            key.push(0);
-        }
-    }
-}
-
-impl HMAC for MD5 {
+impl Hmac for MD5 {
     fn process_hmac(msg: Vec<u8>, mut key: Vec<u8>) -> String {
-        pad_key(&mut key);
+        pad_key::<MD5>(&mut key);
         let o_key_pad: Vec<u8> = key.iter().map(|&x| x ^ 0x5c).collect();
         let i_key_pad: Vec<u8> = key.iter().map(|&x| x ^ 0x36).collect();
 

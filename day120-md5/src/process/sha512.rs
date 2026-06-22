@@ -62,12 +62,12 @@ impl ComputeHash for SHA512 {
             let mut h: u64 = h_[7];
 
             for i in 0..80 {
-                let S1: u64 = (e.rotate_right(14)) ^ (e.rotate_right(18)) ^ (e.rotate_right(41));
+                let s1: u64 = (e.rotate_right(14)) ^ (e.rotate_right(18)) ^ (e.rotate_right(41));
                 let ch: u64 = (e & f) ^ (!e & g);
-                let temp1: u64 = h + S1 + ch + K[i] + w[i];
-                let S0: u64 = (a.rotate_right(28)) ^ (a.rotate_right(34)) ^ (a.rotate_right(39));
+                let temp1: u64 = h + s1 + ch + K[i] + w[i];
+                let s0: u64 = (a.rotate_right(28)) ^ (a.rotate_right(34)) ^ (a.rotate_right(39));
                 let maj: u64 = (a & b) ^ (a & c) ^ (b & c);
-                let temp2: u64 = S0 + maj;
+                let temp2: u64 = s0 + maj;
 
                 h = g;
                 g = f;

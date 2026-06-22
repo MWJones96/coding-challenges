@@ -507,5 +507,17 @@ fn test_hmac_md5() {
         .assert()
         .success()
         .stdout(predicate::eq("3726c9c0ea1ff6206d840c06ea9416ad  -\n"));
+}
+
+#[test]
+fn test_hmac_sha256() {
+    let mut cmd = Command::cargo_bin("day120-md5").unwrap();
+    cmd.write_stdin("test")
+        .args(["-a", "sha256", "--hmac", "test"])
+        .assert()
+        .success()
+        .stdout(predicate::eq(
+            "88cd2108b5347d973cf39cdf9053d7dd42704876d8c9a9bd8e2d168259d3ddf7  -\n",
+        ));
     //
 }

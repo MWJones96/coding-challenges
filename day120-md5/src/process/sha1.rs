@@ -33,7 +33,7 @@ impl ComputeHash for SHA1 {
             let mut d = h3;
             let mut e = h4;
 
-            for i in 0..80 {
+            (0..w.len()).for_each(|i| {
                 let mut f: u32 = 0;
                 let mut k: u32 = 0;
                 if i < 20 {
@@ -56,7 +56,7 @@ impl ComputeHash for SHA1 {
                 c = b.rotate_left(30);
                 b = a;
                 a = temp;
-            }
+            });
 
             h0 += a;
             h1 += b;
