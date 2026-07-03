@@ -13,7 +13,7 @@ enum Token {
     True,
     False,
     Null,
-    UnknownKeyword,
+    Unknown,
 }
 
 struct Lexer;
@@ -86,10 +86,10 @@ impl Lexer {
             "false" => Token::False,
             "null" => Token::Null,
             kwd => {
-                let parse_num = kwd.parse::<u64>();
+                let parse_num = kwd.parse::<f64>();
                 match parse_num {
                     Ok(_) => Token::Number,
-                    Err(_) => Token::UnknownKeyword,
+                    Err(_) => Token::Unknown,
                 }
             }
         }
@@ -228,7 +228,7 @@ fn test_lexer_unknown_keyword() {
             Token::Colon,
             Token::StringLiteral,
             Token::Comma,
-            Token::UnknownKeyword,
+            Token::Unknown,
             Token::Colon,
             Token::StringLiteral,
             Token::RightBrace
@@ -284,7 +284,7 @@ fn test_lexer_badly_formed_keyword() {
             Token::Comma,
             Token::StringLiteral,
             Token::Colon,
-            Token::UnknownKeyword,
+            Token::Unknown,
             Token::Comma,
             Token::StringLiteral,
             Token::Colon,
@@ -396,8 +396,8 @@ fn test_lexer_with_inner_object_and_array_with_bad_string_literal() {
             Token::StringLiteral,
             Token::Colon,
             Token::LeftBracket,
-            Token::UnknownKeyword,
-            Token::UnknownKeyword,
+            Token::Unknown,
+            Token::Unknown,
             Token::RightBracket,
             Token::RightBrace
         ],
@@ -416,6 +416,31 @@ fn test_lexer_supports_string_with_escape_characters() {
             Token::Colon,
             Token::StringLiteral,
             Token::RightBrace
+        ],
+        tokens
+    );
+}
+
+#[test]
+fn test_lexer_supports_various_number_formats() {
+    let test_string = include_str!("../tests/fixtures/step4/valid4.json");
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+
+    assert_eq!(
+        vec![
+            Token::LeftBracket,
+            Token::Number,
+            Token::Comma,
+            Token::Number,
+            Token::Comma,
+            Token::Number,
+            Token::Comma,
+            Token::Number,
+            Token::Comma,
+            Token::Number,
+            Token::Comma,
+            Token::Number,
+            Token::RightBracket,
         ],
         tokens
     );
