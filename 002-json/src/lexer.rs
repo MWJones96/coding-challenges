@@ -15,40 +15,39 @@ impl Lexer {
     fn get_tokens(json_string: &str) -> Vec<Token> {
         let mut tokens = vec![];
         let mut chars = json_string.chars().peekable();
-        while let Some(c) = chars.peek() {
-            match c {
-                '{' => {
-                    tokens.push(Token::LeftBrace);
-                }
-                '}' => {
-                    tokens.push(Token::RightBrace);
-                }
-                '"' => {
-                    Self::consume_string_literal(&mut chars);
-                    tokens.push(Token::StringLiteral);
-                }
-                ':' => {
-                    tokens.push(Token::Colon);
-                }
-                ',' => {
-                    tokens.push(Token::Comma);
-                }
-                'a'..='z' | 'A'..='Z' | '0'..='9' => {
-                    Self::consume_keyword(&mut chars);
-                    tokens.push(Token::UnknownKeyword);
-                }
-                _ => {
-                    dbg!(c);
-                }
-            }
+        loop {
+            Self::consume_whitespace(&mut chars);
 
-            chars.next();
+            if let Some(c) = chars.peek() {
+                let token = match c {
+                    '{' => Token::LeftBrace,
+                    '}' => Token::RightBrace,
+                    '"' => {
+                        Self::consume_string_literal(&mut chars);
+                        Token::StringLiteral
+                    }
+                    ':' => Token::Colon,
+                    ',' => Token::Comma,
+                    'a'..='z' | 'A'..='Z' | '0'..='9' => {
+                        Self::consume_keyword(&mut chars);
+                        Token::UnknownKeyword
+                    }
+                    _ => {
+                        dbg!(c);
+                        todo!();
+                    }
+                };
+                tokens.push(token);
+                chars.next();
+            } else {
+                break;
+            }
         }
 
         tokens
     }
 
-    fn consume_string_literal(chars: &mut Peekable<Chars>) {
+    fn consume_string_literal(chars: &mut Peekable<Chars<'_>>) {
         assert!(chars.peek().is_some() && *chars.peek().unwrap() == '"');
 
         //Consume first "
@@ -71,6 +70,16 @@ impl Lexer {
                 _ => {
                     break;
                 }
+            }
+        }
+    }
+
+    fn consume_whitespace(chars: &mut Peekable<Chars<'_>>) {
+        while let Some(c) = chars.peek() {
+            if c.is_ascii_whitespace() {
+                chars.next();
+            } else {
+                break;
             }
         }
     }
