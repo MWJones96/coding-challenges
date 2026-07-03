@@ -53,6 +53,8 @@ impl Lexer {
         while let Some(c) = chars.peek() {
             if *c == '"' {
                 break;
+            } else if *c == '\\' {
+                chars.next();
             }
 
             chars.next();
@@ -397,6 +399,22 @@ fn test_lexer_with_inner_object_and_array_with_bad_string_literal() {
             Token::UnknownKeyword,
             Token::UnknownKeyword,
             Token::RightBracket,
+            Token::RightBrace
+        ],
+        tokens
+    );
+}
+
+#[test]
+fn test_lexer_supports_string_with_escape_characters() {
+    let test_string = include_str!("../tests/fixtures/step4/valid3.json");
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    assert_eq!(
+        vec![
+            Token::LeftBrace,
+            Token::StringLiteral,
+            Token::Colon,
+            Token::StringLiteral,
             Token::RightBrace
         ],
         tokens
