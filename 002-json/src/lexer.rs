@@ -51,9 +51,10 @@ impl Lexer {
         chars.next();
 
         let mut parsed_str = String::new();
-        while let Some(c) = chars.next()
-            && c != '"'
-        {
+        while let Some(c) = chars.next() {
+            if c == '"' {
+                return Token::StringLiteral(parsed_str);
+            }
             if c == '\\' {
                 let next_char = chars.next().unwrap();
                 match next_char {
@@ -65,7 +66,7 @@ impl Lexer {
             }
         }
 
-        Token::StringLiteral(parsed_str)
+        Token::UnfinishedString(parsed_str)
     }
 
     fn consume_other(chars: &mut Peekable<Chars<'_>>) -> Token {
@@ -447,6 +448,19 @@ fn test_lexer_supports_various_number_formats() {
             Token::Number(-1.0),
             Token::RightBracket,
         ],
+        tokens
+    );
+}
+
+#[test]
+fn test_lexer_supports_unterminated_string() {
+    let test_string = "\"this string is not terminated correctly";
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+
+    assert_eq!(
+        vec![Token::UnfinishedString(String::from(
+            "this string is not terminated correctly"
+        ))],
         tokens
     );
 }
