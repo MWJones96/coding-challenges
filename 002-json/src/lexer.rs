@@ -59,6 +59,11 @@ impl Lexer {
                 let next_char = chars.next().unwrap();
                 match next_char {
                     'n' => parsed_str.push('\n'),
+                    'b' => parsed_str.push('\u{0008}'),
+                    'f' => parsed_str.push('\u{000C}'),
+                    'r' => parsed_str.push('\r'),
+                    't' => parsed_str.push('\t'),
+                    '"' | '\\' | '/' => parsed_str.push(next_char),
                     _ => parsed_str.push(next_char),
                 }
             } else {
@@ -420,7 +425,7 @@ fn test_lexer_supports_string_with_escape_characters() {
             Token::LeftBrace,
             Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral(String::from("v\nal\"ue\"")),
+            Token::StringLiteral(String::from("v\n\u{0008}\u{000C}\r\tal\"ue\"aaaaaa\\/")),
             Token::RightBrace
         ],
         tokens
