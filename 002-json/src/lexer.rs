@@ -1,31 +1,30 @@
 use std::{iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq)]
-enum Token {
+pub enum Token {
     LeftBrace,
     RightBrace,
     LeftBracket,
     RightBracket,
-    StringLiteral,
-    Number,
     Colon,
     Comma,
-    True,
-    False,
+    StringLiteral(String),
+    UnfinishedString(String),
+    Number(f64),
+    Boolean(bool),
     Null,
     Unknown,
 }
 
-struct Lexer;
+pub struct Lexer;
 impl Lexer {
-    fn get_tokens(json_string: &str) -> Vec<Token> {
+    pub fn get_tokens(json_string: &str) -> Vec<Token> {
         let mut tokens = vec![];
         let mut chars = json_string.chars().peekable();
         loop {
             Self::consume_whitespace(&mut chars);
 
             if let Some(c) = chars.peek() {
-                dbg!(c);
                 let token = match c {
                     '{' => Self::consume_left_brace(&mut chars),
                     '}' => Self::consume_right_brace(&mut chars),
@@ -50,18 +49,23 @@ impl Lexer {
 
         //Consume first "
         chars.next();
-        while let Some(c) = chars.peek() {
-            if *c == '"' {
-                break;
-            } else if *c == '\\' {
-                chars.next();
-            }
 
-            chars.next();
+        let mut parsed_str = String::new();
+        while let Some(c) = chars.next()
+            && c != '"'
+        {
+            if c == '\\' {
+                let next_char = chars.next().unwrap();
+                match next_char {
+                    'n' => parsed_str.push('\n'),
+                    _ => parsed_str.push(next_char),
+                }
+            } else {
+                parsed_str.push(c);
+            }
         }
 
-        chars.next();
-        Token::StringLiteral
+        Token::StringLiteral(parsed_str)
     }
 
     fn consume_other(chars: &mut Peekable<Chars<'_>>) -> Token {
@@ -82,14 +86,15 @@ impl Lexer {
             chars.next();
         }
         match keyword.as_str() {
-            "true" => Token::True,
-            "false" => Token::False,
+            "true" => Token::Boolean(true),
+            "false" => Token::Boolean(false),
             "null" => Token::Null,
             kwd => {
                 let parse_num = kwd.parse::<f64>();
-                match parse_num {
-                    Ok(_) => Token::Number,
-                    Err(_) => Token::Unknown,
+                if let Ok(i) = parse_num {
+                    Token::Number(i)
+                } else {
+                    Token::Unknown
                 }
             }
         }
@@ -168,9 +173,9 @@ fn test_lexer_key_value_pair() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::RightBrace
         ],
         tokens
@@ -185,13 +190,13 @@ fn test_lexer_multiple_key_value() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key2")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::RightBrace
         ],
         tokens
@@ -206,9 +211,9 @@ fn test_lexer_comma_after_last_key_value() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
             Token::RightBrace
         ],
@@ -224,13 +229,13 @@ fn test_lexer_unknown_keyword() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
             Token::Unknown,
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::RightBrace
         ],
         tokens
@@ -245,25 +250,25 @@ fn test_lexer_keywords_and_numbers() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key1")),
             Token::Colon,
-            Token::True,
+            Token::Boolean(true),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key2")),
             Token::Colon,
-            Token::False,
+            Token::Boolean(false),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key3")),
             Token::Colon,
             Token::Null,
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key4")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key5")),
             Token::Colon,
-            Token::Number,
+            Token::Number(101.0),
             Token::RightBrace
         ],
         tokens
@@ -278,25 +283,25 @@ fn test_lexer_badly_formed_keyword() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key1")),
             Token::Colon,
-            Token::True,
+            Token::Boolean(true),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key2")),
             Token::Colon,
             Token::Unknown,
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key3")),
             Token::Colon,
             Token::Null,
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key4")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key5")),
             Token::Colon,
-            Token::Number,
+            Token::Number(101.0),
             Token::RightBrace
         ],
         tokens
@@ -311,20 +316,20 @@ fn test_lexer_with_square_brackets() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-n")),
             Token::Colon,
-            Token::Number,
+            Token::Number(101.0),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-o")),
             Token::Colon,
             Token::LeftBrace,
             Token::RightBrace,
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-l")),
             Token::Colon,
             Token::LeftBracket,
             Token::RightBracket,
@@ -342,26 +347,26 @@ fn test_lexer_with_inner_object_and_array() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-n")),
             Token::Colon,
-            Token::Number,
+            Token::Number(101.0),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-o")),
             Token::Colon,
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("inner key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("inner value")),
             Token::RightBrace,
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-l")),
             Token::Colon,
             Token::LeftBracket,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("list value")),
             Token::RightBracket,
             Token::RightBrace
         ],
@@ -377,23 +382,23 @@ fn test_lexer_with_inner_object_and_array_with_bad_string_literal() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("value")),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-n")),
             Token::Colon,
-            Token::Number,
+            Token::Number(101.0),
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-o")),
             Token::Colon,
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("inner key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("inner value")),
             Token::RightBrace,
             Token::Comma,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key-l")),
             Token::Colon,
             Token::LeftBracket,
             Token::Unknown,
@@ -412,9 +417,9 @@ fn test_lexer_supports_string_with_escape_characters() {
     assert_eq!(
         vec![
             Token::LeftBrace,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral,
+            Token::StringLiteral(String::from("v\nal\"ue\"")),
             Token::RightBrace
         ],
         tokens
@@ -429,17 +434,17 @@ fn test_lexer_supports_various_number_formats() {
     assert_eq!(
         vec![
             Token::LeftBracket,
-            Token::Number,
+            Token::Number(100.0),
             Token::Comma,
-            Token::Number,
+            Token::Number(100.5),
             Token::Comma,
-            Token::Number,
+            Token::Number(100.0),
             Token::Comma,
-            Token::Number,
+            Token::Number(100.0),
             Token::Comma,
-            Token::Number,
+            Token::Number(-1.5),
             Token::Comma,
-            Token::Number,
+            Token::Number(-1.0),
             Token::RightBracket,
         ],
         tokens
