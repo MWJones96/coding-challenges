@@ -9,23 +9,34 @@ pub enum Token {
     Colon,
     Comma,
     StringLiteral(String),
-    UnfinishedString(String),
     Number(f64),
     Boolean(bool),
     Null,
-    Unknown,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum LexErrorType {
+    UnknownKeyword,
+    UnterminatedString,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LexError {
+    lex_error_type: LexErrorType,
+    row: usize,
+    col: usize,
 }
 
 pub struct Lexer;
 impl Lexer {
-    pub fn get_tokens(json_string: &str) -> Vec<Token> {
+    pub fn get_tokens(json_string: &str) -> Result<Vec<Token>, LexError> {
         let mut tokens = vec![];
         let mut chars = json_string.chars().peekable();
         loop {
             Self::consume_whitespace(&mut chars);
 
             if let Some(c) = chars.peek() {
-                let token = match c {
+                let token: Result<Token, LexError> = match c {
                     '{' => Self::consume_left_brace(&mut chars),
                     '}' => Self::consume_right_brace(&mut chars),
                     '[' => Self::consume_left_bracket(&mut chars),
@@ -35,16 +46,20 @@ impl Lexer {
                     ',' => Self::consume_comma(&mut chars),
                     _ => Self::consume_other(&mut chars),
                 };
-                tokens.push(token);
+
+                match token {
+                    Ok(t) => tokens.push(t),
+                    Err(e) => return Err(e),
+                }
             } else {
                 break;
             }
         }
 
-        tokens
+        Ok(tokens)
     }
 
-    fn consume_string_literal(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_string_literal(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         assert!(chars.peek().is_some() && *chars.peek().unwrap() == '"');
 
         //Consume first "
@@ -53,7 +68,7 @@ impl Lexer {
         let mut parsed_str = String::new();
         while let Some(c) = chars.next() {
             if c == '"' {
-                return Token::StringLiteral(parsed_str);
+                return Ok(Token::StringLiteral(parsed_str));
             }
             if c == '\\' {
                 let next_char = chars.next().unwrap();
@@ -71,10 +86,14 @@ impl Lexer {
             }
         }
 
-        Token::UnfinishedString(parsed_str)
+        Err(LexError {
+            lex_error_type: LexErrorType::UnterminatedString,
+            row: 0,
+            col: 0,
+        })
     }
 
-    fn consume_other(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_other(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         let mut keyword: String = String::new();
         while let Some(c) = chars.peek() {
             if c.is_ascii_whitespace()
@@ -92,15 +111,19 @@ impl Lexer {
             chars.next();
         }
         match keyword.as_str() {
-            "true" => Token::Boolean(true),
-            "false" => Token::Boolean(false),
-            "null" => Token::Null,
+            "true" => Ok(Token::Boolean(true)),
+            "false" => Ok(Token::Boolean(false)),
+            "null" => Ok(Token::Null),
             kwd => {
                 let parse_num = kwd.parse::<f64>();
                 if let Ok(i) = parse_num {
-                    Token::Number(i)
+                    Ok(Token::Number(i))
                 } else {
-                    Token::Unknown
+                    Err(LexError {
+                        lex_error_type: LexErrorType::UnknownKeyword,
+                        row: 0,
+                        col: 0,
+                    })
                 }
             }
         }
@@ -116,41 +139,41 @@ impl Lexer {
         }
     }
 
-    fn consume_left_brace(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_left_brace(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         chars.next();
-        Token::LeftBrace
+        Ok(Token::LeftBrace)
     }
 
-    fn consume_right_brace(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_right_brace(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         chars.next();
-        Token::RightBrace
+        Ok(Token::RightBrace)
     }
 
-    fn consume_comma(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_comma(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         chars.next();
-        Token::Comma
+        Ok(Token::Comma)
     }
 
-    fn consume_colon(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_colon(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         chars.next();
-        Token::Colon
+        Ok(Token::Colon)
     }
 
-    fn consume_left_bracket(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_left_bracket(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         chars.next();
-        Token::LeftBracket
+        Ok(Token::LeftBracket)
     }
 
-    fn consume_right_bracket(chars: &mut Peekable<Chars<'_>>) -> Token {
+    fn consume_right_bracket(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         chars.next();
-        Token::RightBracket
+        Ok(Token::RightBracket)
     }
 }
 
 #[test]
 fn test_lexer_empty_object() {
     let test_string = include_str!("../tests/fixtures/step1/valid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(vec![Token::LeftBrace, Token::RightBrace], tokens);
 }
@@ -158,7 +181,7 @@ fn test_lexer_empty_object() {
 #[test]
 fn test_lexer_empty_file() {
     let test_string = include_str!("../tests/fixtures/step1/invalid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(Vec::<Token>::new(), tokens);
 }
@@ -166,7 +189,7 @@ fn test_lexer_empty_file() {
 #[test]
 fn test_lexer_empty_object_with_whitespace() {
     let test_string = "    {   }   ";
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(vec![Token::LeftBrace, Token::RightBrace], tokens);
 }
@@ -174,7 +197,7 @@ fn test_lexer_empty_object_with_whitespace() {
 #[test]
 fn test_lexer_key_value_pair() {
     let test_string = include_str!("../tests/fixtures/step2/valid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -191,7 +214,7 @@ fn test_lexer_key_value_pair() {
 #[test]
 fn test_lexer_multiple_key_value() {
     let test_string = include_str!("../tests/fixtures/step2/valid2.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -212,7 +235,7 @@ fn test_lexer_multiple_key_value() {
 #[test]
 fn test_lexer_comma_after_last_key_value() {
     let test_string = include_str!("../tests/fixtures/step2/invalid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -230,28 +253,22 @@ fn test_lexer_comma_after_last_key_value() {
 #[test]
 fn test_lexer_unknown_keyword() {
     let test_string = include_str!("../tests/fixtures/step2/invalid2.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let err = Lexer::get_tokens(test_string).err().unwrap();
 
     assert_eq!(
-        vec![
-            Token::LeftBrace,
-            Token::StringLiteral(String::from("key")),
-            Token::Colon,
-            Token::StringLiteral(String::from("value")),
-            Token::Comma,
-            Token::Unknown,
-            Token::Colon,
-            Token::StringLiteral(String::from("value")),
-            Token::RightBrace
-        ],
-        tokens
+        LexError {
+            lex_error_type: LexErrorType::UnknownKeyword,
+            row: 0,
+            col: 0,
+        },
+        err
     );
 }
 
 #[test]
 fn test_lexer_keywords_and_numbers() {
     let test_string = include_str!("../tests/fixtures/step3/valid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -284,40 +301,22 @@ fn test_lexer_keywords_and_numbers() {
 #[test]
 fn test_lexer_badly_formed_keyword() {
     let test_string = include_str!("../tests/fixtures/step3/invalid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let err = Lexer::get_tokens(test_string).err().unwrap();
 
     assert_eq!(
-        vec![
-            Token::LeftBrace,
-            Token::StringLiteral(String::from("key1")),
-            Token::Colon,
-            Token::Boolean(true),
-            Token::Comma,
-            Token::StringLiteral(String::from("key2")),
-            Token::Colon,
-            Token::Unknown,
-            Token::Comma,
-            Token::StringLiteral(String::from("key3")),
-            Token::Colon,
-            Token::Null,
-            Token::Comma,
-            Token::StringLiteral(String::from("key4")),
-            Token::Colon,
-            Token::StringLiteral(String::from("value")),
-            Token::Comma,
-            Token::StringLiteral(String::from("key5")),
-            Token::Colon,
-            Token::Number(101.0),
-            Token::RightBrace
-        ],
-        tokens
+        LexError {
+            lex_error_type: LexErrorType::UnknownKeyword,
+            row: 0,
+            col: 0
+        },
+        err
     );
 }
 
 #[test]
 fn test_lexer_with_square_brackets() {
     let test_string = include_str!("../tests/fixtures/step4/valid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -348,7 +347,7 @@ fn test_lexer_with_square_brackets() {
 #[test]
 fn test_lexer_with_inner_object_and_array() {
     let test_string = include_str!("../tests/fixtures/step4/valid2.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -383,49 +382,30 @@ fn test_lexer_with_inner_object_and_array() {
 #[test]
 fn test_lexer_with_inner_object_and_array_with_bad_string_literal() {
     let test_string = include_str!("../tests/fixtures/step4/invalid.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let err = Lexer::get_tokens(test_string).err().unwrap();
 
     assert_eq!(
-        vec![
-            Token::LeftBrace,
-            Token::StringLiteral(String::from("key")),
-            Token::Colon,
-            Token::StringLiteral(String::from("value")),
-            Token::Comma,
-            Token::StringLiteral(String::from("key-n")),
-            Token::Colon,
-            Token::Number(101.0),
-            Token::Comma,
-            Token::StringLiteral(String::from("key-o")),
-            Token::Colon,
-            Token::LeftBrace,
-            Token::StringLiteral(String::from("inner key")),
-            Token::Colon,
-            Token::StringLiteral(String::from("inner value")),
-            Token::RightBrace,
-            Token::Comma,
-            Token::StringLiteral(String::from("key-l")),
-            Token::Colon,
-            Token::LeftBracket,
-            Token::Unknown,
-            Token::Unknown,
-            Token::RightBracket,
-            Token::RightBrace
-        ],
-        tokens
+        LexError {
+            lex_error_type: LexErrorType::UnknownKeyword,
+            row: 0,
+            col: 0
+        },
+        err
     );
 }
 
 #[test]
 fn test_lexer_supports_string_with_escape_characters() {
     let test_string = include_str!("../tests/fixtures/step4/valid3.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
     assert_eq!(
         vec![
             Token::LeftBrace,
             Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral(String::from("v\n\u{0008}\u{000C}\r\tal\"ue\"aaaaaa\\/")),
+            Token::StringLiteral(String::from(
+                "v\n\u{0008}\u{000C}\r\tal\"ue\"aaaaaa\\/\u{aaaa}\u{aaaa}\u{aaaa}"
+            )),
             Token::RightBrace
         ],
         tokens
@@ -435,7 +415,7 @@ fn test_lexer_supports_string_with_escape_characters() {
 #[test]
 fn test_lexer_supports_various_number_formats() {
     let test_string = include_str!("../tests/fixtures/step4/valid4.json");
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
     assert_eq!(
         vec![
@@ -460,12 +440,14 @@ fn test_lexer_supports_various_number_formats() {
 #[test]
 fn test_lexer_supports_unterminated_string() {
     let test_string = "\"this string is not terminated correctly";
-    let tokens: Vec<Token> = Lexer::get_tokens(test_string);
+    let err = Lexer::get_tokens(test_string).err().unwrap();
 
     assert_eq!(
-        vec![Token::UnfinishedString(String::from(
-            "this string is not terminated correctly"
-        ))],
-        tokens
+        LexError {
+            lex_error_type: LexErrorType::UnterminatedString,
+            row: 0,
+            col: 0
+        },
+        err
     );
 }
