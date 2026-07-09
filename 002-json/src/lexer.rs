@@ -18,6 +18,9 @@ pub enum Token {
 pub enum LexErrorType {
     UnknownKeyword,
     UnterminatedString,
+    BadEscapeCharacter,
+    UnexpectedEOF,
+    BadHexString,
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,8 +81,38 @@ impl Lexer {
                     'f' => parsed_str.push('\u{000C}'),
                     'r' => parsed_str.push('\r'),
                     't' => parsed_str.push('\t'),
+                    'u' => {
+                        if let Some(c1) = chars.next()
+                            && let Some(c2) = chars.next()
+                            && let Some(c3) = chars.next()
+                            && let Some(c4) = chars.next()
+                        {
+                            let hex_str = format!("{}{}{}{}", c1, c2, c3, c4);
+                            dbg!(&hex_str);
+                            match hex::decode(hex_str) {
+                                Ok(bytes) => {
+                                    for byte in bytes {
+                                        parsed_str.push(byte as char);
+                                    }
+                                }
+                                Err(_) => todo!(),
+                            }
+                        } else {
+                            return Err(LexError {
+                                lex_error_type: LexErrorType::UnexpectedEOF,
+                                row: 0,
+                                col: 0,
+                            });
+                        }
+                    }
                     '"' | '\\' | '/' => parsed_str.push(next_char),
-                    _ => parsed_str.push(next_char),
+                    _ => {
+                        return Err(LexError {
+                            lex_error_type: LexErrorType::BadEscapeCharacter,
+                            row: 0,
+                            col: 0,
+                        });
+                    }
                 }
             } else {
                 parsed_str.push(c);
@@ -398,14 +431,17 @@ fn test_lexer_with_inner_object_and_array_with_bad_string_literal() {
 fn test_lexer_supports_string_with_escape_characters() {
     let test_string = include_str!("../tests/fixtures/step4/valid3.json");
     let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
+
+    dbg!(&tokens);
     assert_eq!(
         vec![
             Token::LeftBrace,
             Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral(String::from(
-                "v\n\u{0008}\u{000C}\r\tal\"ue\"aaaaaa\\/\u{aaaa}\u{aaaa}\u{aaaa}"
-            )),
+            Token::StringLiteral(String::from(format!(
+                "v\n\u{0008}\u{000C}\r\tal\"ue\"aaaaaa\\/{}{}{}{}{}{}",
+                0xaa as char, 0xaa as char, 0xbb as char, 0xbb as char, 0xcc as char, 0xcc as char
+            ))),
             Token::RightBrace
         ],
         tokens
