@@ -14,18 +14,18 @@ pub enum Token {
     Null,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum LexErrorType {
-    UnknownKeyword,
-    UnterminatedString,
-    BadEscapeCharacter,
+    UnexpectedCharacter(char),
+    BadNumberFormat(String),
+    BadEscapeCharacter(char),
     UnexpectedEOF,
-    BadHexString,
+    BadHexString(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LexError {
-    lex_error_type: LexErrorType,
+    err_type: LexErrorType,
     row: usize,
     col: usize,
 }
@@ -35,36 +35,59 @@ impl Lexer {
     pub fn get_tokens(json_string: &str) -> Result<Vec<Token>, LexError> {
         let mut tokens = vec![];
         let mut chars = json_string.chars().peekable();
-        loop {
+        while chars.peek().is_some() {
             Self::consume_whitespace(&mut chars);
 
             if let Some(c) = chars.peek() {
                 let token: Result<Token, LexError> = match c {
-                    '{' => Self::consume_left_brace(&mut chars),
-                    '}' => Self::consume_right_brace(&mut chars),
-                    '[' => Self::consume_left_bracket(&mut chars),
-                    ']' => Self::consume_right_bracket(&mut chars),
+                    '{' => {
+                        chars.next();
+                        Ok(Token::LeftBrace)
+                    }
+                    '}' => {
+                        chars.next();
+                        Ok(Token::RightBrace)
+                    }
+                    '[' => {
+                        chars.next();
+                        Ok(Token::LeftBracket)
+                    }
+                    ']' => {
+                        chars.next();
+                        Ok(Token::RightBracket)
+                    }
                     '"' => Self::consume_string_literal(&mut chars),
-                    ':' => Self::consume_colon(&mut chars),
-                    ',' => Self::consume_comma(&mut chars),
-                    _ => Self::consume_other(&mut chars),
+                    ':' => {
+                        chars.next();
+                        Ok(Token::Colon)
+                    }
+                    ',' => {
+                        chars.next();
+                        Ok(Token::Comma)
+                    }
+                    't' => Self::consume_true(&mut chars),
+                    'f' => Self::consume_false(&mut chars),
+                    'n' => Self::consume_null(&mut chars),
+                    '-' | '1'..='9' => Self::consume_number(&mut chars),
+                    other => {
+                        return Err(LexError {
+                            err_type: LexErrorType::UnexpectedCharacter(*other),
+                            row: 0,
+                            col: 0,
+                        });
+                    }
                 };
 
                 match token {
                     Ok(t) => tokens.push(t),
                     Err(e) => return Err(e),
                 }
-            } else {
-                break;
             }
         }
-
         Ok(tokens)
     }
 
     fn consume_string_literal(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        assert!(chars.peek().is_some() && *chars.peek().unwrap() == '"');
-
         //Consume first "
         chars.next();
 
@@ -74,6 +97,14 @@ impl Lexer {
                 return Ok(Token::StringLiteral(parsed_str));
             }
             if c == '\\' {
+                if chars.peek().is_none() {
+                    return Err(LexError {
+                        err_type: LexErrorType::UnexpectedEOF,
+                        row: 0,
+                        col: 0,
+                    });
+                }
+
                 let next_char = chars.next().unwrap();
                 match next_char {
                     'n' => parsed_str.push('\n'),
@@ -82,33 +113,38 @@ impl Lexer {
                     'r' => parsed_str.push('\r'),
                     't' => parsed_str.push('\t'),
                     'u' => {
-                        if let Some(c1) = chars.next()
-                            && let Some(c2) = chars.next()
-                            && let Some(c3) = chars.next()
-                            && let Some(c4) = chars.next()
-                        {
-                            let hex_str = format!("{}{}{}{}", c1, c2, c3, c4);
-                            dbg!(&hex_str);
-                            match hex::decode(hex_str) {
-                                Ok(bytes) => {
-                                    for byte in bytes {
-                                        parsed_str.push(byte as char);
-                                    }
-                                }
-                                Err(_) => todo!(),
-                            }
-                        } else {
+                        let hex_chars: Vec<char> = chars.take(4).collect();
+                        if hex_chars.len() < 4 {
                             return Err(LexError {
-                                lex_error_type: LexErrorType::UnexpectedEOF,
+                                err_type: LexErrorType::UnexpectedEOF,
                                 row: 0,
                                 col: 0,
                             });
                         }
+
+                        let hex_str = format!(
+                            "{}{}{}{}",
+                            hex_chars[0], hex_chars[1], hex_chars[2], hex_chars[3]
+                        );
+                        match hex::decode(&hex_str) {
+                            Ok(bytes) => {
+                                for byte in bytes {
+                                    parsed_str.push(byte as char);
+                                }
+                            }
+                            Err(_) => {
+                                return Err(LexError {
+                                    err_type: LexErrorType::BadHexString(hex_str),
+                                    row: 0,
+                                    col: 0,
+                                });
+                            }
+                        }
                     }
                     '"' | '\\' | '/' => parsed_str.push(next_char),
-                    _ => {
+                    c => {
                         return Err(LexError {
-                            lex_error_type: LexErrorType::BadEscapeCharacter,
+                            err_type: LexErrorType::BadEscapeCharacter(c),
                             row: 0,
                             col: 0,
                         });
@@ -120,13 +156,13 @@ impl Lexer {
         }
 
         Err(LexError {
-            lex_error_type: LexErrorType::UnterminatedString,
+            err_type: LexErrorType::UnexpectedEOF,
             row: 0,
             col: 0,
         })
     }
 
-    fn consume_other(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
+    fn consume_number(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
         let mut keyword: String = String::new();
         while let Some(c) = chars.peek() {
             if c.is_ascii_whitespace()
@@ -143,63 +179,94 @@ impl Lexer {
             keyword.push(*c);
             chars.next();
         }
-        match keyword.as_str() {
-            "true" => Ok(Token::Boolean(true)),
-            "false" => Ok(Token::Boolean(false)),
-            "null" => Ok(Token::Null),
-            kwd => {
-                let parse_num = kwd.parse::<f64>();
-                if let Ok(i) = parse_num {
-                    Ok(Token::Number(i))
-                } else {
-                    Err(LexError {
-                        lex_error_type: LexErrorType::UnknownKeyword,
-                        row: 0,
-                        col: 0,
-                    })
-                }
-            }
-        }
+
+        let parse_num = keyword.parse::<f64>();
+        parse_num.map_or(
+            Err(LexError {
+                err_type: LexErrorType::BadNumberFormat(keyword),
+                row: 0,
+                col: 0,
+            }),
+            |i| Ok(Token::Number(i)),
+        )
     }
 
     fn consume_whitespace(chars: &mut Peekable<Chars<'_>>) {
-        while let Some(c) = chars.peek() {
-            if c.is_ascii_whitespace() {
-                chars.next();
-            } else {
-                break;
-            }
+        while let Some(c) = chars.peek()
+            && c.is_ascii_whitespace()
+        {
+            chars.next();
         }
     }
 
-    fn consume_left_brace(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        chars.next();
-        Ok(Token::LeftBrace)
+    fn consume_true(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
+        let parsed: Vec<char> = chars.take(4).collect();
+        if parsed.len() < 4 {
+            return Err(LexError {
+                err_type: LexErrorType::UnexpectedEOF,
+                row: 0,
+                col: 0,
+            });
+        }
+
+        let compare: Vec<char> = vec!['t', 'r', 'u', 'e'];
+        for i in 0..compare.len() {
+            if compare[i] != parsed[i] {
+                return Err(LexError {
+                    err_type: LexErrorType::UnexpectedCharacter(parsed[i]),
+                    row: 0,
+                    col: 0,
+                });
+            }
+        }
+
+        Ok(Token::Boolean(true))
     }
 
-    fn consume_right_brace(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        chars.next();
-        Ok(Token::RightBrace)
+    fn consume_false(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
+        let parsed: Vec<char> = chars.take(5).collect();
+        if parsed.len() < 5 {
+            return Err(LexError {
+                err_type: LexErrorType::UnexpectedEOF,
+                row: 0,
+                col: 0,
+            });
+        }
+        let compare: Vec<char> = vec!['f', 'a', 'l', 's', 'e'];
+        for i in 0..compare.len() {
+            if compare[i] != parsed[i] {
+                return Err(LexError {
+                    err_type: LexErrorType::UnexpectedCharacter(parsed[i]),
+                    row: 0,
+                    col: 0,
+                });
+            }
+        }
+
+        Ok(Token::Boolean(false))
     }
 
-    fn consume_comma(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        chars.next();
-        Ok(Token::Comma)
-    }
+    fn consume_null(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
+        let parsed: Vec<char> = chars.take(4).collect();
+        if parsed.len() < 4 {
+            return Err(LexError {
+                err_type: LexErrorType::UnexpectedEOF,
+                row: 0,
+                col: 0,
+            });
+        }
+        let compare: Vec<char> = vec!['n', 'u', 'l', 'l'];
+        for i in 0..compare.len() {
+            if compare[i] != parsed[i] {
+                return Err(LexError {
+                    err_type: LexErrorType::UnexpectedCharacter(parsed[i]),
+                    row: 0,
+                    col: 0,
+                });
+            }
+        }
 
-    fn consume_colon(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        chars.next();
-        Ok(Token::Colon)
-    }
-
-    fn consume_left_bracket(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        chars.next();
-        Ok(Token::LeftBracket)
-    }
-
-    fn consume_right_bracket(chars: &mut Peekable<Chars<'_>>) -> Result<Token, LexError> {
-        chars.next();
-        Ok(Token::RightBracket)
+        Ok(Token::Null)
     }
 }
 
@@ -290,7 +357,7 @@ fn test_lexer_unknown_keyword() {
 
     assert_eq!(
         LexError {
-            lex_error_type: LexErrorType::UnknownKeyword,
+            err_type: LexErrorType::UnexpectedCharacter('k'),
             row: 0,
             col: 0,
         },
@@ -338,7 +405,7 @@ fn test_lexer_badly_formed_keyword() {
 
     assert_eq!(
         LexError {
-            lex_error_type: LexErrorType::UnknownKeyword,
+            err_type: LexErrorType::UnexpectedCharacter('F'),
             row: 0,
             col: 0
         },
@@ -419,7 +486,7 @@ fn test_lexer_with_inner_object_and_array_with_bad_string_literal() {
 
     assert_eq!(
         LexError {
-            lex_error_type: LexErrorType::UnknownKeyword,
+            err_type: LexErrorType::UnexpectedCharacter('\''),
             row: 0,
             col: 0
         },
@@ -432,16 +499,15 @@ fn test_lexer_supports_string_with_escape_characters() {
     let test_string = include_str!("../tests/fixtures/step4/valid3.json");
     let tokens: Vec<Token> = Lexer::get_tokens(test_string).unwrap();
 
-    dbg!(&tokens);
     assert_eq!(
         vec![
             Token::LeftBrace,
             Token::StringLiteral(String::from("key")),
             Token::Colon,
-            Token::StringLiteral(String::from(format!(
+            Token::StringLiteral(format!(
                 "v\n\u{0008}\u{000C}\r\tal\"ue\"aaaaaa\\/{}{}{}{}{}{}",
                 0xaa as char, 0xaa as char, 0xbb as char, 0xbb as char, 0xcc as char, 0xcc as char
-            ))),
+            )),
             Token::RightBrace
         ],
         tokens
@@ -480,7 +546,7 @@ fn test_lexer_supports_unterminated_string() {
 
     assert_eq!(
         LexError {
-            lex_error_type: LexErrorType::UnterminatedString,
+            err_type: LexErrorType::UnexpectedEOF,
             row: 0,
             col: 0
         },

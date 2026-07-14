@@ -4,7 +4,10 @@ mod lexer;
 mod parser;
 
 fn main() {
-    let i = 0;
-    Lexer::get_tokens("");
+    let tokens = Lexer::get_tokens("{true}");
+    match tokens {
+        Ok(_) => println!("Success"),
+        Err(_) => println!("Failure"),
+    }
     println!("Hello, world!");
 }
