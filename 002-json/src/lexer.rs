@@ -35,6 +35,7 @@ pub enum LexErrorType {
     UnexpectedToken(char),
     BadNumberFormat(String),
     BadEscapeCharacter(char),
+    BadControlCharacterInStringLiteral(char),
     UnexpectedEOF,
     BadHexString(String),
 }
@@ -137,9 +138,9 @@ impl<'a> Lexer<'a> {
                 self.next();
                 Ok(TokenType::Comma)
             }
-            't' => Self::consume_true(self),
-            'f' => Self::consume_false(self),
-            'n' => Self::consume_null(self),
+            't' => Self::consume_keyword_true(self),
+            'f' => Self::consume_keyword_false(self),
+            'n' => Self::consume_keyword_null(self),
             '-' | '1'..='9' => Self::consume_number(self),
             other => Err(LexErrorType::UnexpectedToken(other)),
         };
@@ -152,11 +153,15 @@ impl<'a> Lexer<'a> {
         self.next();
 
         let mut parsed_str = String::new();
-        while let Some(c) = self.next() {
+        while let Some(c) = self.peek() {
             if c == '"' {
+                self.next();
                 return Ok(TokenType::StringLiteral(parsed_str));
+            } else if c.is_ascii_control() {
+                return Err(LexErrorType::BadControlCharacterInStringLiteral(c));
             }
             if c == '\\' {
+                self.next();
                 if self.peek().is_none() {
                     return Err(LexErrorType::UnexpectedEOF);
                 }
@@ -200,6 +205,7 @@ impl<'a> Lexer<'a> {
                 }
             } else {
                 parsed_str.push(c);
+                self.next();
             }
         }
 
@@ -256,7 +262,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn consume_true(&mut self) -> Result<TokenType, LexErrorType> {
+    fn consume_keyword_true(&mut self) -> Result<TokenType, LexErrorType> {
         let parsed: Vec<char> = self.input_str.by_ref().take(4).collect();
         if parsed.len() < 4 {
             return Err(LexErrorType::UnexpectedEOF);
@@ -272,7 +278,7 @@ impl<'a> Lexer<'a> {
         Ok(TokenType::Boolean(true))
     }
 
-    fn consume_false(&mut self) -> Result<TokenType, LexErrorType> {
+    fn consume_keyword_false(&mut self) -> Result<TokenType, LexErrorType> {
         let parsed: Vec<char> = self.input_str.by_ref().take(5).collect();
         if parsed.len() < 5 {
             return Err(LexErrorType::UnexpectedEOF);
@@ -287,7 +293,7 @@ impl<'a> Lexer<'a> {
         Ok(TokenType::Boolean(false))
     }
 
-    fn consume_null(&mut self) -> Result<TokenType, LexErrorType> {
+    fn consume_keyword_null(&mut self) -> Result<TokenType, LexErrorType> {
         let parsed: Vec<char> = self.input_str.by_ref().take(4).collect();
         if parsed.len() < 4 {
             return Err(LexErrorType::UnexpectedEOF);
@@ -724,6 +730,23 @@ fn test_lexer_unexpected_character() {
             line: 1,
             col: 2,
             index: 1
+        },
+        err
+    );
+}
+
+#[test]
+fn test_lexer_bad_byte_in_string() {
+    let test_string = "\"control byte: \nsecond line\"";
+    let mut lexer = Lexer::new(&test_string);
+    let err = lexer.get_tokens().err().unwrap();
+
+    assert_eq!(
+        LexError {
+            err_type: LexErrorType::BadControlCharacterInStringLiteral('\n'),
+            line: 1,
+            col: 16,
+            index: 15
         },
         err
     );
