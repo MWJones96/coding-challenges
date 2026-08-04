@@ -141,7 +141,7 @@ impl<'a> Lexer<'a> {
             't' => Self::consume_keyword_true(self),
             'f' => Self::consume_keyword_false(self),
             'n' => Self::consume_keyword_null(self),
-            '-' | '1'..='9' => Self::consume_number(self),
+            '-' | '0'..='9' => Self::consume_number(self),
             other => Err(LexErrorType::UnexpectedToken(other)),
         };
 
@@ -159,8 +159,7 @@ impl<'a> Lexer<'a> {
                 return Ok(TokenType::StringLiteral(parsed_str));
             } else if c.is_ascii_control() {
                 return Err(LexErrorType::BadControlCharacterInStringLiteral(c));
-            }
-            if c == '\\' {
+            } else if c == '\\' {
                 self.next();
                 if self.peek().is_none() {
                     return Err(LexErrorType::UnexpectedEOF);
@@ -213,14 +212,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn get_hex_string(&mut self) -> Result<Vec<u8>, LexErrorType> {
-        let hex_chars: Vec<char> = self.input_str.by_ref().take(4).collect();
-        if hex_chars.len() < 4 {
-            return Err(LexErrorType::UnexpectedEOF);
+        let mut hex_str: String = String::new();
+
+        for _ in 0..4 {
+            if let Some(c) = self.peek() {
+                hex_str.push(c);
+                self.next();
+            } else {
+                return Err(LexErrorType::UnexpectedEOF);
+            }
         }
-        let hex_str = format!(
-            "{}{}{}{}",
-            hex_chars[0], hex_chars[1], hex_chars[2], hex_chars[3]
-        );
 
         match hex::decode(&hex_str) {
             Ok(bytes) => Ok(bytes),
@@ -263,15 +264,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_keyword_true(&mut self) -> Result<TokenType, LexErrorType> {
-        let parsed: Vec<char> = self.input_str.by_ref().take(4).collect();
-        if parsed.len() < 4 {
-            return Err(LexErrorType::UnexpectedEOF);
-        }
-
-        let compare: Vec<char> = vec!['t', 'r', 'u', 'e'];
-        for i in 0..compare.len() {
-            if compare[i] != parsed[i] {
-                return Err(LexErrorType::UnexpectedToken(parsed[i]));
+        let chars: Vec<char> = vec!['t', 'r', 'u', 'e'];
+        for c in chars {
+            if let Some(c2) = self.peek() {
+                if c != c2 {
+                    return Err(LexErrorType::UnexpectedToken(c2));
+                } else {
+                    self.next();
+                }
+            } else {
+                return Err(LexErrorType::UnexpectedEOF);
             }
         }
 
@@ -279,14 +281,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_keyword_false(&mut self) -> Result<TokenType, LexErrorType> {
-        let parsed: Vec<char> = self.input_str.by_ref().take(5).collect();
-        if parsed.len() < 5 {
-            return Err(LexErrorType::UnexpectedEOF);
-        }
-        let compare: Vec<char> = vec!['f', 'a', 'l', 's', 'e'];
-        for i in 0..compare.len() {
-            if compare[i] != parsed[i] {
-                return Err(LexErrorType::UnexpectedToken(parsed[i]));
+        let chars: Vec<char> = vec!['f', 'a', 'l', 's', 'e'];
+        for c in chars {
+            if let Some(c2) = self.peek() {
+                if c != c2 {
+                    return Err(LexErrorType::UnexpectedToken(c2));
+                } else {
+                    self.next();
+                }
+            } else {
+                return Err(LexErrorType::UnexpectedEOF);
             }
         }
 
@@ -294,14 +298,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_keyword_null(&mut self) -> Result<TokenType, LexErrorType> {
-        let parsed: Vec<char> = self.input_str.by_ref().take(4).collect();
-        if parsed.len() < 4 {
-            return Err(LexErrorType::UnexpectedEOF);
-        }
-        let compare: Vec<char> = vec!['n', 'u', 'l', 'l'];
-        for i in 0..compare.len() {
-            if compare[i] != parsed[i] {
-                return Err(LexErrorType::UnexpectedToken(parsed[i]));
+        let chars: Vec<char> = vec!['n', 'u', 'l', 'l'];
+        for c in chars {
+            if let Some(c2) = self.peek() {
+                if c != c2 {
+                    return Err(LexErrorType::UnexpectedToken(c2));
+                } else {
+                    self.next();
+                }
+            } else {
+                return Err(LexErrorType::UnexpectedEOF);
             }
         }
 
@@ -492,7 +498,7 @@ fn test_lexer_badly_formed_keyword() {
             err_type: LexErrorType::UnexpectedToken('F'),
             line: 3,
             col: 11,
-            index: 24
+            index: 28
         },
         err
     );
@@ -711,8 +717,8 @@ fn test_lexer_bad_hex_string() {
         LexError {
             err_type: LexErrorType::BadHexString("gggg".to_string()),
             line: 1,
-            col: 20,
-            index: 19
+            col: 24,
+            index: 23
         },
         err
     );
