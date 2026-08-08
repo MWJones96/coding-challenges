@@ -33,12 +33,11 @@ pub struct LexError {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LexErrorType {
     UnexpectedToken(String),
-    BadNumberFormat(String),
+    BadNumber(String),
     BadEscapeCharacter(char),
-    MissingEscapeCharacter(String),
-    BadControlCharacterInStringLiteral(char),
+    ControlCharacterInStringLiteral(char),
     UnterminatedString(String),
-    BadEscapedHexString(String),
+    BadHexString(String),
 }
 
 pub struct Lexer<'a> {
@@ -97,7 +96,7 @@ impl<'a> Lexer<'a> {
                         index: index_before,
                     }),
                     Err(e) => match &e {
-                        LexErrorType::BadControlCharacterInStringLiteral(_)
+                        LexErrorType::ControlCharacterInStringLiteral(_)
                         | LexErrorType::BadEscapeCharacter(_) => {
                             return Err(LexError {
                                 err_type: e,
@@ -106,7 +105,7 @@ impl<'a> Lexer<'a> {
                                 index: self.index,
                             });
                         }
-                        LexErrorType::BadEscapedHexString(hex_str) => {
+                        LexErrorType::BadHexString(hex_str) => {
                             return Err(LexError {
                                 err_type: e.clone(),
                                 line: self.line,
@@ -183,13 +182,13 @@ impl<'a> Lexer<'a> {
                     return Ok(TokenType::StringLiteral(parsed_str));
                 }
                 '\x00'..='\x1F' | '\x7F' => {
-                    return Err(LexErrorType::BadControlCharacterInStringLiteral(c));
+                    return Err(LexErrorType::ControlCharacterInStringLiteral(c));
                 }
                 '\\' => {
                     self.next();
                     let next_char = self
                         .peek()
-                        .ok_or_else(|| LexErrorType::MissingEscapeCharacter(parsed_str.clone()))?;
+                        .ok_or_else(|| LexErrorType::UnterminatedString(parsed_str.clone()))?;
                     match next_char {
                         'n' => {
                             parsed_str.push('\n');
@@ -241,17 +240,19 @@ impl<'a> Lexer<'a> {
         let mut hex_str: String = String::new();
 
         for _ in 0..4 {
-            if let Some(c) = self.peek() {
+            if let Some(c) = self.peek()
+                && !c.is_ascii_whitespace()
+            {
                 hex_str.push(c);
                 self.next();
             } else {
-                return Err(LexErrorType::BadEscapedHexString(hex_str));
+                return Err(LexErrorType::BadHexString(hex_str));
             }
         }
 
         match hex::decode(&hex_str) {
             Ok(bytes) => Ok(bytes),
-            Err(_e) => Err(LexErrorType::BadEscapedHexString(hex_str)),
+            Err(_e) => Err(LexErrorType::BadHexString(hex_str)),
         }
     }
 
@@ -269,7 +270,7 @@ impl<'a> Lexer<'a> {
         }
 
         let parse_num = num_string.parse::<f64>();
-        parse_num.map_or(Err(LexErrorType::BadNumberFormat(num_string)), |i| {
+        parse_num.map_or(Err(LexErrorType::BadNumber(num_string)), |i| {
             Ok(TokenType::Number(i))
         })
     }
@@ -430,7 +431,7 @@ mod test {
 
         assert_eq!(
             LexError {
-                err_type: LexErrorType::MissingEscapeCharacter("no character escaped ".to_string()),
+                err_type: LexErrorType::UnterminatedString("no character escaped ".to_string()),
                 line: 1,
                 col: 1,
                 index: 0
@@ -446,7 +447,7 @@ mod test {
 
         assert_eq!(
             LexError {
-                err_type: LexErrorType::BadEscapedHexString("gggg".to_string()),
+                err_type: LexErrorType::BadHexString("gggg".to_string()),
                 line: 1,
                 col: 20,
                 index: 19
@@ -478,10 +479,25 @@ mod test {
 
         assert_eq!(
             LexError {
-                err_type: LexErrorType::BadControlCharacterInStringLiteral('\n'),
+                err_type: LexErrorType::ControlCharacterInStringLiteral('\n'),
                 line: 1,
                 col: 16,
                 index: 15
+            },
+            err
+        );
+    }
+
+    #[test]
+    fn test_lexer_short_hex_string() {
+        let mut lexer = Lexer::new("[\"\\ufff \"]");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        assert_eq!(
+            LexError {
+                err_type: LexErrorType::BadHexString("fff".to_string()),
+                line: 1,
+                col: 5,
+                index: 4
             },
             err
         );
