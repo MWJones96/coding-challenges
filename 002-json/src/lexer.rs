@@ -22,7 +22,7 @@ pub enum TokenType {
     Null,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LexError {
     err_type: LexErrorType,
     line: usize,
@@ -30,7 +30,7 @@ pub struct LexError {
     index: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LexErrorType {
     UnexpectedToken(String),
     BadNumberFormat(String),
@@ -43,7 +43,7 @@ pub enum LexErrorType {
 
 pub struct Lexer<'a> {
     input_str: Peekable<Chars<'a>>,
-    row: usize,
+    line: usize,
     col: usize,
     index: usize,
 }
@@ -52,7 +52,7 @@ impl<'a> Lexer<'a> {
     pub fn new(json_str: &'a str) -> Self {
         Lexer {
             input_str: json_str.chars().peekable(),
-            row: 1,
+            line: 1,
             col: 1,
             index: 0,
         }
@@ -66,7 +66,7 @@ impl<'a> Lexer<'a> {
     fn next(&mut self) -> Option<char> {
         let c = self.input_str.next()?;
         if c == '\n' {
-            self.row += 1;
+            self.line += 1;
             self.col = 0;
         }
 
@@ -76,14 +76,14 @@ impl<'a> Lexer<'a> {
         Some(c)
     }
 
-    pub fn get_tokens(&mut self) -> Result<Vec<Token>, LexError> {
+    pub fn get_list_of_tokens_or_error(&mut self) -> Result<Vec<Token>, LexError> {
         let mut tokens = vec![];
 
         while self.peek().is_some() {
             Self::consume_whitespace(self);
 
             if let Some(c) = self.peek() {
-                let line_before = self.row;
+                let line_before = self.line;
                 let col_before = self.col;
                 let index_before = self.index;
 
@@ -96,14 +96,33 @@ impl<'a> Lexer<'a> {
                         col: col_before,
                         index: index_before,
                     }),
-                    Err(e) => {
-                        return Err(LexError {
-                            err_type: e,
-                            line: line_before,
-                            col: col_before,
-                            index: index_before,
-                        });
-                    }
+                    Err(e) => match &e {
+                        LexErrorType::BadControlCharacterInStringLiteral(_)
+                        | LexErrorType::BadEscapeCharacter(_) => {
+                            return Err(LexError {
+                                err_type: e,
+                                line: self.line,
+                                col: self.col,
+                                index: self.index,
+                            });
+                        }
+                        LexErrorType::BadEscapedHexString(hex_str) => {
+                            return Err(LexError {
+                                err_type: e.clone(),
+                                line: self.line,
+                                col: self.col - hex_str.len(),
+                                index: self.index - hex_str.len(),
+                            });
+                        }
+                        _ => {
+                            return Err(LexError {
+                                err_type: e,
+                                line: line_before,
+                                col: col_before,
+                                index: index_before,
+                            });
+                        }
+                    },
                 }
             }
         }
@@ -194,7 +213,7 @@ impl<'a> Lexer<'a> {
                         }
                         'u' => {
                             self.next();
-                            let bytes = self.get_hex_string()?;
+                            let bytes = self.consume_hex_string()?;
                             for byte in bytes {
                                 parsed_str.push(byte as char);
                             }
@@ -218,7 +237,7 @@ impl<'a> Lexer<'a> {
         Err(LexErrorType::UnterminatedString(parsed_str))
     }
 
-    fn get_hex_string(&mut self) -> Result<Vec<u8>, LexErrorType> {
+    fn consume_hex_string(&mut self) -> Result<Vec<u8>, LexErrorType> {
         let mut hex_str: String = String::new();
 
         for _ in 0..4 {
@@ -232,7 +251,7 @@ impl<'a> Lexer<'a> {
 
         match hex::decode(&hex_str) {
             Ok(bytes) => Ok(bytes),
-            Err(e) => Err(LexErrorType::BadEscapedHexString(hex_str)),
+            Err(_e) => Err(LexErrorType::BadEscapedHexString(hex_str)),
         }
     }
 
@@ -289,9 +308,9 @@ mod test {
     #[test]
     fn test_lexer_empty_file() {
         let test_string = "";
-        let mut lexer = Lexer::new(&test_string);
+        let mut lexer = Lexer::new(test_string);
         let tokens: Vec<TokenType> = lexer
-            .get_tokens()
+            .get_list_of_tokens_or_error()
             .unwrap()
             .iter()
             .map(|x| x.t_type.clone())
@@ -303,9 +322,9 @@ mod test {
     #[test]
     fn test_lexer_with_square_brackets() {
         let test_string = include_str!("../tests/fixtures/valid.json");
-        let mut lexer = Lexer::new(&test_string);
+        let mut lexer = Lexer::new(test_string);
         let tokens: Vec<TokenType> = lexer
-            .get_tokens()
+            .get_list_of_tokens_or_error()
             .unwrap()
             .iter()
             .map(|x| x.t_type.clone())
@@ -348,10 +367,32 @@ mod test {
     }
 
     #[test]
+    fn test_lexer_get_tokens_with_index_info() {
+        let mut lexer = Lexer::new(" [\n  ]");
+        let tokens = lexer.get_list_of_tokens_or_error().unwrap();
+        assert_eq!(
+            vec![
+                Token {
+                    t_type: TokenType::LeftBracket,
+                    line: 1,
+                    col: 2,
+                    index: 1
+                },
+                Token {
+                    t_type: TokenType::RightBracket,
+                    line: 2,
+                    col: 3,
+                    index: 5
+                },
+            ],
+            tokens
+        );
+    }
+
+    #[test]
     fn test_lexer_supports_unterminated_string() {
-        let test_string = "\"this string is not terminated correctly";
-        let mut lexer = Lexer::new(&test_string);
-        let err = lexer.get_tokens().err().unwrap();
+        let mut lexer = Lexer::new("\"this string is not terminated correctly");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -368,16 +409,15 @@ mod test {
 
     #[test]
     fn test_lexer_bad_escape_character() {
-        let test_string = "\"bad escape character \\a\"";
-        let mut lexer = Lexer::new(&test_string);
-        let err = lexer.get_tokens().err().unwrap();
+        let mut lexer = Lexer::new("\"bad escape character \\a\"");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
 
         assert_eq!(
             LexError {
                 err_type: LexErrorType::BadEscapeCharacter('a'),
                 line: 1,
-                col: 1,
-                index: 0
+                col: 24,
+                index: 23
             },
             err
         );
@@ -385,9 +425,8 @@ mod test {
 
     #[test]
     fn test_lexer_backslash_with_no_character() {
-        let test_string = "\"no character escaped \\";
-        let mut lexer = Lexer::new(&test_string);
-        let err = lexer.get_tokens().err().unwrap();
+        let mut lexer = Lexer::new("\"no character escaped \\");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -402,16 +441,15 @@ mod test {
 
     #[test]
     fn test_lexer_bad_hex_string() {
-        let test_string = "\"bad hex string: \\ugggg\"";
-        let mut lexer = Lexer::new(&test_string);
-        let err = lexer.get_tokens().err().unwrap();
+        let mut lexer = Lexer::new("\"bad hex string: \\ugggg\"");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
 
         assert_eq!(
             LexError {
                 err_type: LexErrorType::BadEscapedHexString("gggg".to_string()),
                 line: 1,
-                col: 1,
-                index: 0
+                col: 20,
+                index: 19
             },
             err
         );
@@ -419,9 +457,8 @@ mod test {
 
     #[test]
     fn test_lexer_unexpected_character() {
-        let test_string = "{abcdef}";
-        let mut lexer = Lexer::new(&test_string);
-        let err = lexer.get_tokens().err().unwrap();
+        let mut lexer = Lexer::new("{abcdef}");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -436,16 +473,15 @@ mod test {
 
     #[test]
     fn test_lexer_bad_byte_in_string() {
-        let test_string = "\"control byte: \nsecond line\"";
-        let mut lexer = Lexer::new(&test_string);
-        let err = lexer.get_tokens().err().unwrap();
+        let mut lexer = Lexer::new("\"control byte: \nsecond line\"");
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
 
         assert_eq!(
             LexError {
                 err_type: LexErrorType::BadControlCharacterInStringLiteral('\n'),
                 line: 1,
-                col: 1,
-                index: 0
+                col: 16,
+                index: 15
             },
             err
         );
