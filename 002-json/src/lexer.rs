@@ -83,12 +83,12 @@ impl<'a> Lexer<'a> {
         while self.peek().is_some() {
             Self::consume_whitespace(self);
 
-            if let Some(c) = self.peek() {
+            if self.peek().is_some() {
                 let line_before = self.line;
                 let col_before = self.col;
                 let index_before = self.index;
 
-                let token = Self::get_token_or_error(self, c);
+                let token = Self::get_token_or_error(self);
 
                 match token {
                     Ok(t) => tokens.push(Token {
@@ -131,7 +131,8 @@ impl<'a> Lexer<'a> {
         Ok(tokens)
     }
 
-    fn get_token_or_error(&mut self, c: char) -> Result<TokenType, LexErrorType> {
+    fn get_token_or_error(&mut self) -> Result<TokenType, LexErrorType> {
+        let c = self.peek().unwrap();
         let token: Result<TokenType, LexErrorType> = match c {
             '{' => {
                 self.next();
@@ -158,7 +159,7 @@ impl<'a> Lexer<'a> {
                 self.next();
                 Ok(TokenType::Comma)
             }
-            '-' | '+' | '0'..='9' => {
+            '-' | '+' | '.' | 'e' | 'E' | '0'..='9' => {
                 let num = Self::consume_number(self);
 
                 let re = Regex::new(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$").unwrap();
@@ -552,17 +553,22 @@ mod test {
 
     #[test]
     fn test_lexer_number_preceded_by_plus() {
-        let mut lexer = Lexer::new("+0");
+        let mut lexer1 = Lexer::new("+0");
+        let mut lexer2 = Lexer::new("0123");
+        let mut lexer3 = Lexer::new("12.");
+        let mut lexer4 = Lexer::new(".5");
+        let mut lexer5 = Lexer::new("1e");
 
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
-        assert_eq!(
-            LexError {
-                err_type: LexErrorType::BadNumber("+0".to_string()),
-                line: 1,
-                col: 1,
-                index: 0
-            },
-            err
-        );
+        let err1 = lexer1.get_list_of_tokens_or_error().err().unwrap();
+        let err2 = lexer2.get_list_of_tokens_or_error().err().unwrap();
+        let err3 = lexer3.get_list_of_tokens_or_error().err().unwrap();
+        let err4 = lexer4.get_list_of_tokens_or_error().err().unwrap();
+        let err5 = lexer5.get_list_of_tokens_or_error().err().unwrap();
+
+        assert_eq!(LexErrorType::BadNumber("+0".to_string()), err1.err_type);
+        assert_eq!(LexErrorType::BadNumber("0123".to_string()), err2.err_type);
+        assert_eq!(LexErrorType::BadNumber("12.".to_string()), err3.err_type);
+        assert_eq!(LexErrorType::BadNumber(".5".to_string()), err4.err_type);
+        assert_eq!(LexErrorType::BadNumber("1e".to_string()), err5.err_type);
     }
 }
