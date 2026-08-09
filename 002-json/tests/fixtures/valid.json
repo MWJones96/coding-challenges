@@ -1,8 +1,8 @@
 {
-  "key": "value",
+  "key": "value \n\b\f\r\t\"\\\/",
   "key-n": 101,
   "key-o": {
-    "inner key": "inner value"
+    "inner key": "inner value \u1234 \uAAAA \uaaaa"
   },
   "key-l": ["list value", true, false, null]
 }

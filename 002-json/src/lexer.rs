@@ -1,5 +1,7 @@
 use std::{collections::HashSet, iter::Peekable, str::Chars};
 
+use regex::Regex;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     t_type: TokenType,
@@ -99,7 +101,7 @@ impl<'a> Lexer<'a> {
                         LexErrorType::ControlCharacterInStringLiteral(_)
                         | LexErrorType::BadEscapeCharacter(_) => {
                             return Err(LexError {
-                                err_type: e,
+                                err_type: e.clone(),
                                 line: self.line,
                                 col: self.col,
                                 index: self.index,
@@ -115,7 +117,7 @@ impl<'a> Lexer<'a> {
                         }
                         _ => {
                             return Err(LexError {
-                                err_type: e,
+                                err_type: e.clone(),
                                 line: line_before,
                                 col: col_before,
                                 index: index_before,
@@ -156,7 +158,19 @@ impl<'a> Lexer<'a> {
                 self.next();
                 Ok(TokenType::Comma)
             }
-            '-' | '0'..='9' => Self::consume_number(self),
+            '-' | '+' | '0'..='9' => {
+                let num = Self::consume_number(self);
+
+                let re = Regex::new(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$").unwrap();
+                if !re.is_match(&num) {
+                    return Err(LexErrorType::BadNumber(num));
+                }
+
+                let parse_num = num.parse::<f64>();
+                parse_num.map_or(Err(LexErrorType::BadNumber(num)), |i| {
+                    Ok(TokenType::Number(i))
+                })
+            }
             _kwd => {
                 let kwd = Self::consume_keyword(self);
                 match kwd.as_str() {
@@ -256,12 +270,12 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn consume_number(&mut self) -> Result<TokenType, LexErrorType> {
-        let delimeters = HashSet::from([',', ':', '{', '}', '[', ']', '"']);
+    fn consume_number(&mut self) -> String {
+        let delimiters = HashSet::from([',', ':', '{', '}', '[', ']', '"']);
 
         let mut num_string: String = String::new();
         while let Some(c) = self.peek() {
-            if delimeters.contains(&c) || c.is_ascii_whitespace() {
+            if delimiters.contains(&c) || c.is_ascii_whitespace() {
                 break;
             }
 
@@ -269,10 +283,7 @@ impl<'a> Lexer<'a> {
             self.next();
         }
 
-        let parse_num = num_string.parse::<f64>();
-        parse_num.map_or(Err(LexErrorType::BadNumber(num_string)), |i| {
-            Ok(TokenType::Number(i))
-        })
+        num_string
     }
 
     fn consume_whitespace(&mut self) {
@@ -286,11 +297,11 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_keyword(&mut self) -> String {
-        let delimeters = HashSet::from([',', ':', '{', '}', '[', ']', '"']);
+        let delimiters = HashSet::from([',', ':', '{', '}', '[', ']', '"']);
 
         let mut parsed = String::new();
         while let Some(c) = self.peek() {
-            if delimeters.contains(&c) || c.is_ascii_whitespace() {
+            if delimiters.contains(&c) || c.is_ascii_whitespace() {
                 break;
             }
 
@@ -336,7 +347,7 @@ mod test {
                 TokenType::LeftBrace,
                 TokenType::StringLiteral("key".to_string()),
                 TokenType::Colon,
-                TokenType::StringLiteral("value".to_string()),
+                TokenType::StringLiteral("value \n\x08\x0C\r\t\"\\/".to_string()),
                 TokenType::Comma,
                 TokenType::StringLiteral("key-n".to_string()),
                 TokenType::Colon,
@@ -347,7 +358,9 @@ mod test {
                 TokenType::LeftBrace,
                 TokenType::StringLiteral("inner key".to_string()),
                 TokenType::Colon,
-                TokenType::StringLiteral("inner value".to_string()),
+                TokenType::StringLiteral(
+                    "inner value \x12\x34 \u{AA}\u{AA} \u{AA}\u{AA}".to_string()
+                ),
                 TokenType::RightBrace,
                 TokenType::Comma,
                 TokenType::StringLiteral("key-l".to_string()),
@@ -498,6 +511,49 @@ mod test {
                 line: 1,
                 col: 5,
                 index: 4
+            },
+            err
+        );
+    }
+
+    #[test]
+    fn test_lexer_valid_numbers() {
+        let mut lexer = Lexer::new("42 -17 0 -0 0.1 1.23456 6.02e+23 1e10 -1.5E-4");
+
+        let tokens: Vec<TokenType> = lexer
+            .get_list_of_tokens_or_error()
+            .unwrap()
+            .iter()
+            .map(|x| x.t_type.clone())
+            .collect();
+
+        assert_eq!(
+            vec![
+                TokenType::Number(42.0),
+                TokenType::Number(-17.0),
+                TokenType::Number(0.0),
+                TokenType::Number(0.0),
+                TokenType::Number(0.1),
+                TokenType::Number(1.23456),
+                TokenType::Number(6.02e23),
+                TokenType::Number(1e10),
+                TokenType::Number(-1.5e-4),
+            ],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_lexer_number_preceded_by_plus() {
+        let mut lexer = Lexer::new("+0");
+
+        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        assert_eq!(
+            LexError {
+                err_type: LexErrorType::BadNumber("+0".to_string()),
+                line: 1,
+                col: 1,
+                index: 0
             },
             err
         );
