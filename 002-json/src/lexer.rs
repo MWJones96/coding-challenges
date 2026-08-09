@@ -226,9 +226,19 @@ impl<'a> Lexer<'a> {
                         }
                         'u' => {
                             self.next();
-                            let bytes = self.consume_hex_string()?;
-                            for byte in bytes {
-                                parsed_str.push(byte as char);
+                            let hex_str = self.consume_hex_string();
+                            if hex_str.len() < 4 {
+                                return Err(LexErrorType::BadHexString(hex_str));
+                            }
+
+                            let hex_decode = hex::decode(&hex_str);
+                            match hex_decode {
+                                Ok(bytes) => {
+                                    for byte in bytes {
+                                        parsed_str.push(byte as char);
+                                    }
+                                }
+                                Err(_) => return Err(LexErrorType::BadHexString(hex_str)),
                             }
                         }
                         '"' | '\\' | '/' => {
@@ -250,7 +260,7 @@ impl<'a> Lexer<'a> {
         Err(LexErrorType::UnterminatedString(parsed_str))
     }
 
-    fn consume_hex_string(&mut self) -> Result<Vec<u8>, LexErrorType> {
+    fn consume_hex_string(&mut self) -> String {
         let mut hex_str: String = String::new();
 
         for _ in 0..4 {
@@ -260,14 +270,11 @@ impl<'a> Lexer<'a> {
                 hex_str.push(c);
                 self.next();
             } else {
-                return Err(LexErrorType::BadHexString(hex_str));
+                break;
             }
         }
 
-        match hex::decode(&hex_str) {
-            Ok(bytes) => Ok(bytes),
-            Err(_e) => Err(LexErrorType::BadHexString(hex_str)),
-        }
+        hex_str
     }
 
     fn consume_number(&mut self) -> String {
