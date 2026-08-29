@@ -128,142 +128,142 @@ fn get_num_chars_locale(bytes: &Vec<u8>) -> usize {
 
 #[test]
 fn test_num_bytes() {
-    let input = include_bytes!("../test.txt");
+    let input = include_bytes!("../tests/fixtures/test.txt");
     assert_eq!(342_190, get_num_bytes(&input.to_vec()));
 }
 
 #[test]
 fn test_num_lines() {
-    let input = include_bytes!("../test.txt");
+    let input = include_bytes!("../tests/fixtures/test.txt");
     assert_eq!(7_145, get_num_lines(&input.to_vec()));
 }
 
 #[test]
 fn test_num_words() {
-    let input = include_bytes!("../test.txt");
+    let input = include_bytes!("../tests/fixtures/test.txt");
     assert_eq!(58_164, get_num_words(&input.to_vec()));
 }
 
 #[test]
 fn test_num_chars_locale() {
-    let input = include_bytes!("../test.txt");
+    let input = include_bytes!("../tests/fixtures/test.txt");
     assert_eq!(339_292, get_num_chars_locale(&input.to_vec()));
 }
 
 #[test]
 fn test_output_num_bytes() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-c", "test.txt"])
+        .args(["run", "--", "-c", "tests/fixtures/test.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("  342190 test.txt\n", stdout);
+    assert_eq!("  342190 tests/fixtures/test.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_bytes_test2() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-c", "test2.txt"])
+        .args(["run", "--", "-c", "tests/fixtures/test2.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("       1 test2.txt\n", stdout);
+    assert_eq!("       1 tests/fixtures/test2.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_lines() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-l", "test.txt"])
+        .args(["run", "--", "-l", "tests/fixtures/test.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("    7145 test.txt\n", stdout);
+    assert_eq!("    7145 tests/fixtures/test.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_lines_test2() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-l", "test2.txt"])
+        .args(["run", "--", "-l", "tests/fixtures/test2.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("       0 test2.txt\n", stdout);
+    assert_eq!("       0 tests/fixtures/test2.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_words() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-w", "test.txt"])
+        .args(["run", "--", "-w", "tests/fixtures/test.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("   58164 test.txt\n", stdout);
+    assert_eq!("   58164 tests/fixtures/test.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_words_test2() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-w", "test2.txt"])
+        .args(["run", "--", "-w", "tests/fixtures/test2.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("       1 test2.txt\n", stdout);
+    assert_eq!("       1 tests/fixtures/test2.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_chars_locale() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-m", "test.txt"])
+        .args(["run", "--", "-m", "tests/fixtures/test.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("  339292 test.txt\n", stdout);
+    assert_eq!("  339292 tests/fixtures/test.txt\n", stdout);
 }
 
 #[test]
 fn test_output_num_chars_locale_test2() {
     let output = Command::new("cargo")
-        .args(["run", "--", "-m", "test2.txt"])
+        .args(["run", "--", "-m", "tests/fixtures/test2.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("       1 test2.txt\n", stdout);
+    assert_eq!("       1 tests/fixtures/test2.txt\n", stdout);
 }
 
 #[test]
 fn test_output_no_options() {
     let output = Command::new("cargo")
-        .args(["run", "--", "test.txt"])
+        .args(["run", "--", "tests/fixtures/test.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("    7145   58164  342190 test.txt\n", stdout);
+    assert_eq!("    7145   58164  342190 tests/fixtures/test.txt\n", stdout);
 }
 
 #[test]
 fn test_output_no_options_test2() {
     let output = Command::new("cargo")
-        .args(["run", "--", "test2.txt"])
+        .args(["run", "--", "tests/fixtures/test2.txt"])
         .output()
         .expect("Failed to execute");
 
     let stdout = str::from_utf8(&output.stdout).expect("Invalid UTF8");
-    assert_eq!("       0       1       1 test2.txt\n", stdout);
+    assert_eq!("       0       1       1 tests/fixtures/test2.txt\n", stdout);
 }
 
 #[test]
 fn test_output_pipe() {
     let cat_process = Command::new("cat")
-        .arg("test.txt")
+        .arg("tests/fixtures/test.txt")
         .stdout(Stdio::piped()) // Capture its output
         .spawn()
         .expect("Failed to start cat");
@@ -286,7 +286,7 @@ fn test_output_pipe() {
 #[test]
 fn test_output_pipe_test2() {
     let cat_process = Command::new("cat")
-        .arg("test2.txt")
+        .arg("tests/fixtures/test2.txt")
         .stdout(Stdio::piped()) // Capture its output
         .spawn()
         .expect("Failed to start cat");

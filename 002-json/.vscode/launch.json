@@ -5,25 +5,25 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug executable 'json-parser'",
+            "name": "Debug executable 'day002-json'",
             "type": "lldb",
             "request": "launch",
             "cargo": {
                 "args": [
                     "run",
-                    "--bin=json-parser"
+                    "--bin=day002-json"
                 ]
             },
             "args": []
         },
         {
-            "name": "Debug unit tests in executable 'json-parser'",
+            "name": "Debug unit tests in executable 'day002-json'",
             "type": "lldb",
             "request": "launch",
             "cargo": {
                 "args": [
                     "test",
-                    "--bin=json-parser"
+                    "--bin=day002-json"
                 ]
             }
         }
