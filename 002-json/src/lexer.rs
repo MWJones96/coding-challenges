@@ -85,6 +85,16 @@ pub enum LexErrorType {
     BadHexString(String),
 }
 
+/// A snapshot of where the lexer was at some earlier point, so an error
+/// or token can be tagged with the position it actually started at instead
+/// of wherever the lexer happens to be by the time the mistake is noticed.
+#[derive(Clone, Copy)]
+struct Position {
+    line: usize,
+    col: usize,
+    index: usize,
+}
+
 pub struct Lexer<'a> {
     input_str: Peekable<Chars<'a>>,
     line: usize,
@@ -119,6 +129,31 @@ impl<'a> Lexer<'a> {
         Some(c)
     }
 
+    fn position(&self) -> Position {
+        Position {
+            line: self.line,
+            col: self.col,
+            index: self.index,
+        }
+    }
+
+    /// Builds an error anchored to the lexer's *current* position - for
+    /// mistakes that are noticed before the offending character is consumed.
+    fn error(&self, err_type: LexErrorType) -> LexError {
+        self.error_at(self.position(), err_type)
+    }
+
+    /// Builds an error anchored to a position captured earlier - for mistakes
+    /// that are only noticed after consuming past where they actually started.
+    fn error_at(&self, pos: Position, err_type: LexErrorType) -> LexError {
+        LexError {
+            err_type,
+            line: pos.line,
+            col: pos.col,
+            index: pos.index,
+        }
+    }
+
     pub fn tokenize(&mut self) -> Result<Vec<Token>, LexError> {
         let mut tokens = vec![];
 
@@ -126,52 +161,23 @@ impl<'a> Lexer<'a> {
             self.consume_whitespace();
 
             let Some(c) = self.peek() else { break };
+            let start = self.position();
 
-            let line_before = self.line;
-            let col_before = self.col;
-            let index_before = self.index;
-
-            match self.next_token(c) {
-                Ok(t) => tokens.push(Token {
-                    t_type: t,
-                    line: line_before,
-                    col: col_before,
-                    index: index_before,
-                }),
-                Err(e) => match &e {
-                    LexErrorType::ControlCharacterInStringLiteral(_)
-                    | LexErrorType::BadEscapeCharacter(_) => {
-                        return Err(LexError {
-                            err_type: e.clone(),
-                            line: self.line,
-                            col: self.col,
-                            index: self.index,
-                        });
-                    }
-                    LexErrorType::BadHexString(hex_str) => {
-                        return Err(LexError {
-                            err_type: e.clone(),
-                            line: self.line,
-                            col: self.col - hex_str.len(),
-                            index: self.index - hex_str.len(),
-                        });
-                    }
-                    _ => {
-                        return Err(LexError {
-                            err_type: e.clone(),
-                            line: line_before,
-                            col: col_before,
-                            index: index_before,
-                        });
-                    }
-                },
-            }
+            let t_type = self.next_token(c)?;
+            tokens.push(Token {
+                t_type,
+                line: start.line,
+                col: start.col,
+                index: start.index,
+            });
         }
 
         Ok(tokens)
     }
 
-    fn next_token(&mut self, c: char) -> Result<TokenType, LexErrorType> {
+    fn next_token(&mut self, c: char) -> Result<TokenType, LexError> {
+        let start = self.position();
+
         match c {
             '{' => {
                 self.advance();
@@ -189,7 +195,7 @@ impl<'a> Lexer<'a> {
                 self.advance();
                 Ok(TokenType::RightBracket)
             }
-            '"' => self.consume_string_literal(),
+            '"' => self.consume_string_literal(start),
             ':' => {
                 self.advance();
                 Ok(TokenType::Colon)
@@ -199,30 +205,29 @@ impl<'a> Lexer<'a> {
                 Ok(TokenType::Comma)
             }
             '-' | '+' | '.' | 'e' | 'E' | '0'..='9' => {
-                let num = self.consume_number();
+                let num = self.consume_until_delimiter();
 
                 if !NUMBER_RE.is_match(&num) {
-                    return Err(LexErrorType::BadNumber(num));
+                    return Err(self.error_at(start, LexErrorType::BadNumber(num)));
                 }
 
                 num.parse::<f64>()
-                    .map_or(Err(LexErrorType::BadNumber(num)), |i| {
-                        Ok(TokenType::Number(i))
-                    })
+                    .map(TokenType::Number)
+                    .map_err(|_| self.error_at(start, LexErrorType::BadNumber(num)))
             }
             _ => {
-                let kwd = self.consume_keyword();
+                let kwd = self.consume_until_delimiter();
                 match kwd.as_str() {
                     "true" => Ok(TokenType::Boolean(true)),
                     "false" => Ok(TokenType::Boolean(false)),
                     "null" => Ok(TokenType::Null),
-                    _ => Err(LexErrorType::UnexpectedToken(kwd)),
+                    _ => Err(self.error_at(start, LexErrorType::UnexpectedToken(kwd))),
                 }
             }
         }
     }
 
-    fn consume_string_literal(&mut self) -> Result<TokenType, LexErrorType> {
+    fn consume_string_literal(&mut self, start: Position) -> Result<TokenType, LexError> {
         self.advance();
 
         let mut parsed_str = String::new();
@@ -233,13 +238,13 @@ impl<'a> Lexer<'a> {
                     return Ok(TokenType::StringLiteral(parsed_str));
                 }
                 '\x00'..='\x1F' | '\x7F' => {
-                    return Err(LexErrorType::ControlCharacterInStringLiteral(c));
+                    return Err(self.error(LexErrorType::ControlCharacterInStringLiteral(c)));
                 }
                 '\\' => {
                     self.advance();
-                    let next_char = self
-                        .peek()
-                        .ok_or_else(|| LexErrorType::UnterminatedString(parsed_str.clone()))?;
+                    let next_char = self.peek().ok_or_else(|| {
+                        self.error_at(start, LexErrorType::UnterminatedString(parsed_str.clone()))
+                    })?;
                     match next_char {
                         'n' => {
                             parsed_str.push('\n');
@@ -271,7 +276,7 @@ impl<'a> Lexer<'a> {
                             self.advance();
                         }
                         c => {
-                            return Err(LexErrorType::BadEscapeCharacter(c));
+                            return Err(self.error(LexErrorType::BadEscapeCharacter(c)));
                         }
                     }
                 }
@@ -282,46 +287,54 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        Err(LexErrorType::UnterminatedString(parsed_str))
+        Err(self.error_at(start, LexErrorType::UnterminatedString(parsed_str)))
     }
 
     /// Parses a `\uXXXX` escape into a single `char`, transparently combining
     /// a UTF-16 surrogate pair (`\uD800`-`\uDBFF` followed by `\uDC00`-`\uDFFF`)
     /// into one scalar value when the first code unit demands it.
-    fn parse_unicode_escape(&mut self) -> Result<char, LexErrorType> {
+    fn parse_unicode_escape(&mut self) -> Result<char, LexError> {
+        let start = self.position();
         let high = self.parse_hex_code_unit()?;
 
         if (0xD800..=0xDBFF).contains(&high) {
             if self.peek() != Some('\\') {
-                return Err(LexErrorType::BadHexString(format!("{high:04x}")));
+                return Err(self.error_at(start, LexErrorType::BadHexString(format!("{high:04x}"))));
             }
             self.advance();
 
             if self.peek() != Some('u') {
-                return Err(LexErrorType::BadHexString(format!("{high:04x}")));
+                return Err(self.error_at(start, LexErrorType::BadHexString(format!("{high:04x}"))));
             }
             self.advance();
 
+            let low_start = self.position();
             let low = self.parse_hex_code_unit()?;
             if !(0xDC00..=0xDFFF).contains(&low) {
-                return Err(LexErrorType::BadHexString(format!("{low:04x}")));
+                return Err(
+                    self.error_at(low_start, LexErrorType::BadHexString(format!("{low:04x}")))
+                );
             }
 
             let combined = 0x10000 + ((high as u32 - 0xD800) << 10) + (low as u32 - 0xDC00);
-            return char::from_u32(combined)
-                .ok_or_else(|| LexErrorType::BadHexString(format!("{combined:x}")));
+            return char::from_u32(combined).ok_or_else(|| {
+                self.error_at(start, LexErrorType::BadHexString(format!("{combined:x}")))
+            });
         }
 
-        char::from_u32(high as u32).ok_or_else(|| LexErrorType::BadHexString(format!("{high:04x}")))
+        char::from_u32(high as u32)
+            .ok_or_else(|| self.error_at(start, LexErrorType::BadHexString(format!("{high:04x}"))))
     }
 
-    fn parse_hex_code_unit(&mut self) -> Result<u16, LexErrorType> {
+    fn parse_hex_code_unit(&mut self) -> Result<u16, LexError> {
+        let start = self.position();
         let hex_str = self.consume_hex_string();
         if hex_str.len() < 4 {
-            return Err(LexErrorType::BadHexString(hex_str));
+            return Err(self.error_at(start, LexErrorType::BadHexString(hex_str)));
         }
 
-        u16::from_str_radix(&hex_str, 16).map_err(|_| LexErrorType::BadHexString(hex_str))
+        u16::from_str_radix(&hex_str, 16)
+            .map_err(|_| self.error_at(start, LexErrorType::BadHexString(hex_str)))
     }
 
     fn consume_hex_string(&mut self) -> String {
@@ -341,18 +354,21 @@ impl<'a> Lexer<'a> {
         hex_str
     }
 
-    fn consume_number(&mut self) -> String {
-        let mut num_string: String = String::new();
+    /// Consumes characters up to the next structural delimiter or whitespace -
+    /// shared by number and keyword scanning, which only differ in what they
+    /// do with the resulting slice.
+    fn consume_until_delimiter(&mut self) -> String {
+        let mut consumed = String::new();
         while let Some(c) = self.peek() {
             if is_delimiter(c) || c.is_ascii_whitespace() {
                 break;
             }
 
-            num_string.push(c);
+            consumed.push(c);
             self.advance();
         }
 
-        num_string
+        consumed
     }
 
     fn consume_whitespace(&mut self) {
@@ -363,20 +379,6 @@ impl<'a> Lexer<'a> {
 
             self.advance();
         }
-    }
-
-    fn consume_keyword(&mut self) -> String {
-        let mut parsed = String::new();
-        while let Some(c) = self.peek() {
-            if is_delimiter(c) || c.is_ascii_whitespace() {
-                break;
-            }
-
-            parsed.push(c);
-            self.advance();
-        }
-
-        parsed
     }
 }
 
