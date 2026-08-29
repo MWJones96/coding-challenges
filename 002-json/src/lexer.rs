@@ -9,6 +9,34 @@ fn is_delimiter(c: char) -> bool {
     matches!(c, ',' | ':' | '{' | '}' | '[' | ']' | '"')
 }
 
+/// The `TokenType` for a punctuation character that needs no further lexing.
+fn single_char_token(c: char) -> Option<TokenType> {
+    match c {
+        '{' => Some(TokenType::LeftBrace),
+        '}' => Some(TokenType::RightBrace),
+        '[' => Some(TokenType::LeftBracket),
+        ']' => Some(TokenType::RightBracket),
+        ':' => Some(TokenType::Colon),
+        ',' => Some(TokenType::Comma),
+        _ => None,
+    }
+}
+
+/// The character a single-letter `\` escape (`\n`, `\"`, etc.) stands for.
+/// Doesn't handle `\u`, which needs more than one character to resolve.
+fn simple_escape(c: char) -> Option<char> {
+    match c {
+        'n' => Some('\n'),
+        'b' => Some('\u{0008}'),
+        'f' => Some('\u{000C}'),
+        'r' => Some('\r'),
+        't' => Some('\t'),
+        '"' | '\\' | '/' => Some(c),
+        _ => None,
+    }
+}
+
+/// One lexical unit of a JSON document, tagged with where it starts.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     t_type: TokenType,
@@ -35,6 +63,7 @@ impl Token {
     }
 }
 
+/// The kind of a `Token` and any value it carries.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     LeftBrace,
@@ -49,6 +78,7 @@ pub enum TokenType {
     Null,
 }
 
+/// A lexing failure, tagged with where in the input it started.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LexError {
     err_type: LexErrorType,
@@ -75,6 +105,7 @@ impl LexError {
     }
 }
 
+/// Why lexing failed, independent of where.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LexErrorType {
     UnexpectedToken(String),
@@ -95,6 +126,7 @@ struct Position {
     index: usize,
 }
 
+/// Turns a JSON document's source text into a stream of `Token`s.
 pub struct Lexer<'a> {
     input_str: Peekable<Chars<'a>>,
     line: usize,
@@ -103,6 +135,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+    /// Creates a lexer positioned at the start of `json_str`.
     pub fn new(json_str: &'a str) -> Self {
         Lexer {
             input_str: json_str.chars().peekable(),
@@ -154,6 +187,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Lexes the whole input, stopping at the first error.
     pub fn tokenize(&mut self) -> Result<Vec<Token>, LexError> {
         let mut tokens = vec![];
 
@@ -178,32 +212,13 @@ impl<'a> Lexer<'a> {
     fn next_token(&mut self, c: char) -> Result<TokenType, LexError> {
         let start = self.position();
 
+        if let Some(t_type) = single_char_token(c) {
+            self.advance();
+            return Ok(t_type);
+        }
+
         match c {
-            '{' => {
-                self.advance();
-                Ok(TokenType::LeftBrace)
-            }
-            '}' => {
-                self.advance();
-                Ok(TokenType::RightBrace)
-            }
-            '[' => {
-                self.advance();
-                Ok(TokenType::LeftBracket)
-            }
-            ']' => {
-                self.advance();
-                Ok(TokenType::RightBracket)
-            }
             '"' => self.consume_string_literal(start),
-            ':' => {
-                self.advance();
-                Ok(TokenType::Colon)
-            }
-            ',' => {
-                self.advance();
-                Ok(TokenType::Comma)
-            }
             '-' | '+' | '.' | 'e' | 'E' | '0'..='9' => {
                 let num = self.consume_until_delimiter();
 
@@ -245,39 +260,16 @@ impl<'a> Lexer<'a> {
                     let next_char = self.peek().ok_or_else(|| {
                         self.error_at(start, LexErrorType::UnterminatedString(parsed_str.clone()))
                     })?;
-                    match next_char {
-                        'n' => {
-                            parsed_str.push('\n');
-                            self.advance();
-                        }
-                        'b' => {
-                            parsed_str.push('\u{0008}');
-                            self.advance();
-                        }
-                        'f' => {
-                            parsed_str.push('\u{000C}');
-                            self.advance();
-                        }
-                        'r' => {
-                            parsed_str.push('\r');
-                            self.advance();
-                        }
-                        't' => {
-                            parsed_str.push('\t');
-                            self.advance();
-                        }
-                        'u' => {
-                            self.advance();
-                            let ch = self.parse_unicode_escape()?;
-                            parsed_str.push(ch);
-                        }
-                        '"' | '\\' | '/' => {
-                            parsed_str.push(next_char);
-                            self.advance();
-                        }
-                        c => {
-                            return Err(self.error(LexErrorType::BadEscapeCharacter(c)));
-                        }
+
+                    if let Some(escaped) = simple_escape(next_char) {
+                        parsed_str.push(escaped);
+                        self.advance();
+                    } else if next_char == 'u' {
+                        self.advance();
+                        let ch = self.parse_unicode_escape()?;
+                        parsed_str.push(ch);
+                    } else {
+                        return Err(self.error(LexErrorType::BadEscapeCharacter(next_char)));
                     }
                 }
                 _ => {
@@ -386,30 +378,25 @@ impl<'a> Lexer<'a> {
 mod test {
     use super::*;
 
-    #[test]
-    fn test_lexer_empty_file() {
-        let test_string = "";
-        let mut lexer = Lexer::new(test_string);
-        let tokens: Vec<TokenType> = lexer
+    /// Lexes `input` and returns just the token kinds, for tests that don't
+    /// care about position info.
+    fn token_types(input: &str) -> Vec<TokenType> {
+        Lexer::new(input)
             .tokenize()
             .unwrap()
-            .iter()
-            .map(|x| x.t_type.clone())
-            .collect();
+            .into_iter()
+            .map(|t| t.t_type)
+            .collect()
+    }
 
-        assert_eq!(Vec::<TokenType>::new(), tokens);
+    #[test]
+    fn test_lexer_empty_file() {
+        assert_eq!(Vec::<TokenType>::new(), token_types(""));
     }
 
     #[test]
     fn test_lexer_full_document() {
-        let test_string = include_str!("../tests/fixtures/valid.json");
-        let mut lexer = Lexer::new(test_string);
-        let tokens: Vec<TokenType> = lexer
-            .tokenize()
-            .unwrap()
-            .iter()
-            .map(|x| x.t_type.clone())
-            .collect();
+        let tokens = token_types(include_str!("../tests/fixtures/valid.json"));
 
         assert_eq!(
             vec![
@@ -585,14 +572,7 @@ mod test {
 
     #[test]
     fn test_lexer_valid_numbers() {
-        let mut lexer = Lexer::new("42 -17 0 -0 0.1 1.23456 6.02e+23 1e10 -1.5E-4");
-
-        let tokens: Vec<TokenType> = lexer
-            .tokenize()
-            .unwrap()
-            .iter()
-            .map(|x| x.t_type.clone())
-            .collect();
+        let tokens = token_types("42 -17 0 -0 0.1 1.23456 6.02e+23 1e10 -1.5E-4");
 
         assert_eq!(
             vec![
