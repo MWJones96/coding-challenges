@@ -9,6 +9,12 @@ fn is_delimiter(c: char) -> bool {
     matches!(c, ',' | ':' | '{' | '}' | '[' | ']' | '"')
 }
 
+/// JSON's insignificant whitespace (RFC 8259): space, tab, LF, CR. Notably
+/// narrower than `char::is_ascii_whitespace`, which also accepts form feed.
+fn is_json_whitespace(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\n' | '\r')
+}
+
 /// The `TokenType` for a punctuation character that needs no further lexing.
 fn single_char_token(c: char) -> Option<TokenType> {
     match c {
@@ -252,7 +258,7 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     return Ok(TokenType::StringLiteral(parsed_str));
                 }
-                '\x00'..='\x1F' | '\x7F' => {
+                '\x00'..='\x1F' => {
                     return Err(self.error(LexErrorType::ControlCharacterInStringLiteral(c)));
                 }
                 '\\' => {
@@ -334,7 +340,8 @@ impl<'a> Lexer<'a> {
 
         for _ in 0..4 {
             if let Some(c) = self.peek()
-                && !c.is_ascii_whitespace()
+                && !is_delimiter(c)
+                && !is_json_whitespace(c)
             {
                 hex_str.push(c);
                 self.advance();
@@ -352,7 +359,7 @@ impl<'a> Lexer<'a> {
     fn consume_until_delimiter(&mut self) -> String {
         let mut consumed = String::new();
         while let Some(c) = self.peek() {
-            if is_delimiter(c) || c.is_ascii_whitespace() {
+            if is_delimiter(c) || is_json_whitespace(c) {
                 break;
             }
 
@@ -365,7 +372,7 @@ impl<'a> Lexer<'a> {
 
     fn consume_whitespace(&mut self) {
         while let Some(c) = self.peek() {
-            if !c.is_ascii_whitespace() {
+            if !is_json_whitespace(c) {
                 break;
             }
 
@@ -638,5 +645,41 @@ mod test {
         let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(LexErrorType::BadHexString("d800".to_string()), err.err_type);
+    }
+
+    #[test]
+    fn test_lexer_hex_escape_stops_at_delimiter() {
+        let mut lexer = Lexer::new("\"\\u12\"");
+        let err = lexer.tokenize().err().unwrap();
+
+        assert_eq!(
+            LexError {
+                err_type: LexErrorType::BadHexString("12".to_string()),
+                line: 1,
+                col: 4,
+                index: 3
+            },
+            err
+        );
+    }
+
+    #[test]
+    fn test_lexer_form_feed_is_not_whitespace() {
+        let err = Lexer::new("{\u{0C}}").tokenize().err().unwrap();
+
+        assert_eq!(
+            LexErrorType::UnexpectedToken("\u{0C}".to_string()),
+            err.err_type
+        );
+    }
+
+    #[test]
+    fn test_lexer_allows_del_byte_in_string() {
+        let tokens = token_types("\"a\u{7F}b\"");
+
+        assert_eq!(
+            vec![TokenType::StringLiteral("a\u{7F}b".to_string())],
+            tokens
+        );
     }
 }
