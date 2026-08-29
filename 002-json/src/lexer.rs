@@ -1,6 +1,13 @@
-use std::{collections::HashSet, iter::Peekable, str::Chars};
+use std::{iter::Peekable, str::Chars, sync::LazyLock};
 
 use regex::Regex;
+
+static NUMBER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$").unwrap());
+
+fn is_delimiter(c: char) -> bool {
+    matches!(c, ',' | ':' | '{' | '}' | '[' | ']' | '"')
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token {
@@ -8,6 +15,24 @@ pub struct Token {
     line: usize,
     col: usize,
     index: usize,
+}
+
+impl Token {
+    pub fn t_type(&self) -> &TokenType {
+        &self.t_type
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    pub fn col(&self) -> usize {
+        self.col
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -30,6 +55,24 @@ pub struct LexError {
     line: usize,
     col: usize,
     index: usize,
+}
+
+impl LexError {
+    pub fn err_type(&self) -> &LexErrorType {
+        &self.err_type
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    pub fn col(&self) -> usize {
+        self.col
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -60,120 +103,115 @@ impl<'a> Lexer<'a> {
     }
 
     fn peek(&mut self) -> Option<char> {
-        let c = self.input_str.peek()?;
-        Some(*c)
+        self.input_str.peek().copied()
     }
 
-    fn next(&mut self) -> Option<char> {
+    fn advance(&mut self) -> Option<char> {
         let c = self.input_str.next()?;
         if c == '\n' {
             self.line += 1;
-            self.col = 0;
+            self.col = 1;
+        } else {
+            self.col += 1;
         }
-
-        self.col += 1;
         self.index += 1;
 
         Some(c)
     }
 
-    pub fn get_list_of_tokens_or_error(&mut self) -> Result<Vec<Token>, LexError> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, LexError> {
         let mut tokens = vec![];
 
-        while self.peek().is_some() {
-            Self::consume_whitespace(self);
+        loop {
+            self.consume_whitespace();
 
-            if self.peek().is_some() {
-                let line_before = self.line;
-                let col_before = self.col;
-                let index_before = self.index;
+            let Some(c) = self.peek() else { break };
 
-                let token = Self::get_token_or_error(self);
+            let line_before = self.line;
+            let col_before = self.col;
+            let index_before = self.index;
 
-                match token {
-                    Ok(t) => tokens.push(Token {
-                        t_type: t,
-                        line: line_before,
-                        col: col_before,
-                        index: index_before,
-                    }),
-                    Err(e) => match &e {
-                        LexErrorType::ControlCharacterInStringLiteral(_)
-                        | LexErrorType::BadEscapeCharacter(_) => {
-                            return Err(LexError {
-                                err_type: e.clone(),
-                                line: self.line,
-                                col: self.col,
-                                index: self.index,
-                            });
-                        }
-                        LexErrorType::BadHexString(hex_str) => {
-                            return Err(LexError {
-                                err_type: e.clone(),
-                                line: self.line,
-                                col: self.col - hex_str.len(),
-                                index: self.index - hex_str.len(),
-                            });
-                        }
-                        _ => {
-                            return Err(LexError {
-                                err_type: e.clone(),
-                                line: line_before,
-                                col: col_before,
-                                index: index_before,
-                            });
-                        }
-                    },
-                }
+            match self.next_token(c) {
+                Ok(t) => tokens.push(Token {
+                    t_type: t,
+                    line: line_before,
+                    col: col_before,
+                    index: index_before,
+                }),
+                Err(e) => match &e {
+                    LexErrorType::ControlCharacterInStringLiteral(_)
+                    | LexErrorType::BadEscapeCharacter(_) => {
+                        return Err(LexError {
+                            err_type: e.clone(),
+                            line: self.line,
+                            col: self.col,
+                            index: self.index,
+                        });
+                    }
+                    LexErrorType::BadHexString(hex_str) => {
+                        return Err(LexError {
+                            err_type: e.clone(),
+                            line: self.line,
+                            col: self.col - hex_str.len(),
+                            index: self.index - hex_str.len(),
+                        });
+                    }
+                    _ => {
+                        return Err(LexError {
+                            err_type: e.clone(),
+                            line: line_before,
+                            col: col_before,
+                            index: index_before,
+                        });
+                    }
+                },
             }
         }
 
         Ok(tokens)
     }
 
-    fn get_token_or_error(&mut self) -> Result<TokenType, LexErrorType> {
-        let c = self.peek().unwrap();
-        let token: Result<TokenType, LexErrorType> = match c {
+    fn next_token(&mut self, c: char) -> Result<TokenType, LexErrorType> {
+        match c {
             '{' => {
-                self.next();
+                self.advance();
                 Ok(TokenType::LeftBrace)
             }
             '}' => {
-                self.next();
+                self.advance();
                 Ok(TokenType::RightBrace)
             }
             '[' => {
-                self.next();
+                self.advance();
                 Ok(TokenType::LeftBracket)
             }
             ']' => {
-                self.next();
+                self.advance();
                 Ok(TokenType::RightBracket)
             }
-            '"' => Self::consume_string_literal(self),
+            '"' => self.consume_string_literal(),
             ':' => {
-                self.next();
+                self.advance();
                 Ok(TokenType::Colon)
             }
             ',' => {
-                self.next();
+                self.advance();
                 Ok(TokenType::Comma)
             }
             '-' | '+' | '.' | 'e' | 'E' | '0'..='9' => {
-                let num = Self::consume_number(self);
+                let num = self.consume_number();
 
-                let re = Regex::new(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$").unwrap();
-                if !re.is_match(&num) {
+                if !NUMBER_RE.is_match(&num) {
                     return Err(LexErrorType::BadNumber(num));
                 }
 
-                let parse_num = num.parse::<f64>();
-                parse_num.map_or(Err(LexErrorType::BadNumber(num)), |i| {
-                    Ok(TokenType::Number(i))
-                })
+                num.parse::<f64>()
+                    .map_or(Err(LexErrorType::BadNumber(num)), |i| {
+                        Ok(TokenType::Number(i))
+                    })
             }
-            _kwd => {
-                let kwd = Self::consume_keyword(self);
+            _ => {
+                let kwd = self.consume_keyword();
                 match kwd.as_str() {
                     "true" => Ok(TokenType::Boolean(true)),
                     "false" => Ok(TokenType::Boolean(false)),
@@ -181,70 +219,56 @@ impl<'a> Lexer<'a> {
                     _ => Err(LexErrorType::UnexpectedToken(kwd)),
                 }
             }
-        };
-
-        token
+        }
     }
 
     fn consume_string_literal(&mut self) -> Result<TokenType, LexErrorType> {
-        self.next();
+        self.advance();
 
         let mut parsed_str = String::new();
         while let Some(c) = self.peek() {
             match c {
                 '"' => {
-                    self.next();
+                    self.advance();
                     return Ok(TokenType::StringLiteral(parsed_str));
                 }
                 '\x00'..='\x1F' | '\x7F' => {
                     return Err(LexErrorType::ControlCharacterInStringLiteral(c));
                 }
                 '\\' => {
-                    self.next();
+                    self.advance();
                     let next_char = self
                         .peek()
                         .ok_or_else(|| LexErrorType::UnterminatedString(parsed_str.clone()))?;
                     match next_char {
                         'n' => {
                             parsed_str.push('\n');
-                            self.next();
+                            self.advance();
                         }
                         'b' => {
                             parsed_str.push('\u{0008}');
-                            self.next();
+                            self.advance();
                         }
                         'f' => {
                             parsed_str.push('\u{000C}');
-                            self.next();
+                            self.advance();
                         }
                         'r' => {
                             parsed_str.push('\r');
-                            self.next();
+                            self.advance();
                         }
                         't' => {
                             parsed_str.push('\t');
-                            self.next();
+                            self.advance();
                         }
                         'u' => {
-                            self.next();
-                            let hex_str = self.consume_hex_string();
-                            if hex_str.len() < 4 {
-                                return Err(LexErrorType::BadHexString(hex_str));
-                            }
-
-                            let hex_decode = hex::decode(&hex_str);
-                            match hex_decode {
-                                Ok(bytes) => {
-                                    for byte in bytes {
-                                        parsed_str.push(byte as char);
-                                    }
-                                }
-                                Err(_) => return Err(LexErrorType::BadHexString(hex_str)),
-                            }
+                            self.advance();
+                            let ch = self.parse_unicode_escape()?;
+                            parsed_str.push(ch);
                         }
                         '"' | '\\' | '/' => {
                             parsed_str.push(next_char);
-                            self.next();
+                            self.advance();
                         }
                         c => {
                             return Err(LexErrorType::BadEscapeCharacter(c));
@@ -253,12 +277,51 @@ impl<'a> Lexer<'a> {
                 }
                 _ => {
                     parsed_str.push(c);
-                    self.next();
+                    self.advance();
                 }
             }
         }
 
         Err(LexErrorType::UnterminatedString(parsed_str))
+    }
+
+    /// Parses a `\uXXXX` escape into a single `char`, transparently combining
+    /// a UTF-16 surrogate pair (`\uD800`-`\uDBFF` followed by `\uDC00`-`\uDFFF`)
+    /// into one scalar value when the first code unit demands it.
+    fn parse_unicode_escape(&mut self) -> Result<char, LexErrorType> {
+        let high = self.parse_hex_code_unit()?;
+
+        if (0xD800..=0xDBFF).contains(&high) {
+            if self.peek() != Some('\\') {
+                return Err(LexErrorType::BadHexString(format!("{high:04x}")));
+            }
+            self.advance();
+
+            if self.peek() != Some('u') {
+                return Err(LexErrorType::BadHexString(format!("{high:04x}")));
+            }
+            self.advance();
+
+            let low = self.parse_hex_code_unit()?;
+            if !(0xDC00..=0xDFFF).contains(&low) {
+                return Err(LexErrorType::BadHexString(format!("{low:04x}")));
+            }
+
+            let combined = 0x10000 + ((high as u32 - 0xD800) << 10) + (low as u32 - 0xDC00);
+            return char::from_u32(combined)
+                .ok_or_else(|| LexErrorType::BadHexString(format!("{combined:x}")));
+        }
+
+        char::from_u32(high as u32).ok_or_else(|| LexErrorType::BadHexString(format!("{high:04x}")))
+    }
+
+    fn parse_hex_code_unit(&mut self) -> Result<u16, LexErrorType> {
+        let hex_str = self.consume_hex_string();
+        if hex_str.len() < 4 {
+            return Err(LexErrorType::BadHexString(hex_str));
+        }
+
+        u16::from_str_radix(&hex_str, 16).map_err(|_| LexErrorType::BadHexString(hex_str))
     }
 
     fn consume_hex_string(&mut self) -> String {
@@ -269,7 +332,7 @@ impl<'a> Lexer<'a> {
                 && !c.is_ascii_whitespace()
             {
                 hex_str.push(c);
-                self.next();
+                self.advance();
             } else {
                 break;
             }
@@ -279,16 +342,14 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_number(&mut self) -> String {
-        let delimiters = HashSet::from([',', ':', '{', '}', '[', ']', '"']);
-
         let mut num_string: String = String::new();
         while let Some(c) = self.peek() {
-            if delimiters.contains(&c) || c.is_ascii_whitespace() {
+            if is_delimiter(c) || c.is_ascii_whitespace() {
                 break;
             }
 
             num_string.push(c);
-            self.next();
+            self.advance();
         }
 
         num_string
@@ -300,21 +361,19 @@ impl<'a> Lexer<'a> {
                 break;
             }
 
-            self.next();
+            self.advance();
         }
     }
 
     fn consume_keyword(&mut self) -> String {
-        let delimiters = HashSet::from([',', ':', '{', '}', '[', ']', '"']);
-
         let mut parsed = String::new();
         while let Some(c) = self.peek() {
-            if delimiters.contains(&c) || c.is_ascii_whitespace() {
+            if is_delimiter(c) || c.is_ascii_whitespace() {
                 break;
             }
 
             parsed.push(c);
-            self.next();
+            self.advance();
         }
 
         parsed
@@ -330,7 +389,7 @@ mod test {
         let test_string = "";
         let mut lexer = Lexer::new(test_string);
         let tokens: Vec<TokenType> = lexer
-            .get_list_of_tokens_or_error()
+            .tokenize()
             .unwrap()
             .iter()
             .map(|x| x.t_type.clone())
@@ -340,11 +399,11 @@ mod test {
     }
 
     #[test]
-    fn test_lexer_with_square_brackets() {
+    fn test_lexer_full_document() {
         let test_string = include_str!("../tests/fixtures/valid.json");
         let mut lexer = Lexer::new(test_string);
         let tokens: Vec<TokenType> = lexer
-            .get_list_of_tokens_or_error()
+            .tokenize()
             .unwrap()
             .iter()
             .map(|x| x.t_type.clone())
@@ -366,9 +425,7 @@ mod test {
                 TokenType::LeftBrace,
                 TokenType::StringLiteral("inner key".to_string()),
                 TokenType::Colon,
-                TokenType::StringLiteral(
-                    "inner value \x12\x34 \u{AA}\u{AA} \u{AA}\u{AA}".to_string()
-                ),
+                TokenType::StringLiteral("inner value \u{1234} \u{aaaa} \u{aaaa}".to_string()),
                 TokenType::RightBrace,
                 TokenType::Comma,
                 TokenType::StringLiteral("key-l".to_string()),
@@ -391,7 +448,7 @@ mod test {
     #[test]
     fn test_lexer_get_tokens_with_index_info() {
         let mut lexer = Lexer::new(" [\n  ]");
-        let tokens = lexer.get_list_of_tokens_or_error().unwrap();
+        let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             vec![
                 Token {
@@ -414,7 +471,7 @@ mod test {
     #[test]
     fn test_lexer_supports_unterminated_string() {
         let mut lexer = Lexer::new("\"this string is not terminated correctly");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -432,7 +489,7 @@ mod test {
     #[test]
     fn test_lexer_bad_escape_character() {
         let mut lexer = Lexer::new("\"bad escape character \\a\"");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -448,7 +505,7 @@ mod test {
     #[test]
     fn test_lexer_backslash_with_no_character() {
         let mut lexer = Lexer::new("\"no character escaped \\");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -464,7 +521,7 @@ mod test {
     #[test]
     fn test_lexer_bad_hex_string() {
         let mut lexer = Lexer::new("\"bad hex string: \\ugggg\"");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -480,7 +537,7 @@ mod test {
     #[test]
     fn test_lexer_unexpected_character() {
         let mut lexer = Lexer::new("{abcdef}");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -496,7 +553,7 @@ mod test {
     #[test]
     fn test_lexer_bad_byte_in_string() {
         let mut lexer = Lexer::new("\"control byte: \nsecond line\"");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
 
         assert_eq!(
             LexError {
@@ -512,7 +569,7 @@ mod test {
     #[test]
     fn test_lexer_short_hex_string() {
         let mut lexer = Lexer::new("[\"\\ufff \"]");
-        let err = lexer.get_list_of_tokens_or_error().err().unwrap();
+        let err = lexer.tokenize().err().unwrap();
         assert_eq!(
             LexError {
                 err_type: LexErrorType::BadHexString("fff".to_string()),
@@ -529,7 +586,7 @@ mod test {
         let mut lexer = Lexer::new("42 -17 0 -0 0.1 1.23456 6.02e+23 1e10 -1.5E-4");
 
         let tokens: Vec<TokenType> = lexer
-            .get_list_of_tokens_or_error()
+            .tokenize()
             .unwrap()
             .iter()
             .map(|x| x.t_type.clone())
@@ -552,23 +609,52 @@ mod test {
     }
 
     #[test]
-    fn test_lexer_number_preceded_by_plus() {
-        let mut lexer1 = Lexer::new("+0");
-        let mut lexer2 = Lexer::new("0123");
-        let mut lexer3 = Lexer::new("12.");
-        let mut lexer4 = Lexer::new(".5");
-        let mut lexer5 = Lexer::new("1e");
+    fn test_lexer_invalid_number_formats() {
+        let cases = ["+0", "0123", "12.", ".5", "1e"];
 
-        let err1 = lexer1.get_list_of_tokens_or_error().err().unwrap();
-        let err2 = lexer2.get_list_of_tokens_or_error().err().unwrap();
-        let err3 = lexer3.get_list_of_tokens_or_error().err().unwrap();
-        let err4 = lexer4.get_list_of_tokens_or_error().err().unwrap();
-        let err5 = lexer5.get_list_of_tokens_or_error().err().unwrap();
+        for input in cases {
+            let err = Lexer::new(input).tokenize().err().unwrap();
+            assert_eq!(LexErrorType::BadNumber(input.to_string()), err.err_type);
+        }
+    }
 
-        assert_eq!(LexErrorType::BadNumber("+0".to_string()), err1.err_type);
-        assert_eq!(LexErrorType::BadNumber("0123".to_string()), err2.err_type);
-        assert_eq!(LexErrorType::BadNumber("12.".to_string()), err3.err_type);
-        assert_eq!(LexErrorType::BadNumber(".5".to_string()), err4.err_type);
-        assert_eq!(LexErrorType::BadNumber("1e".to_string()), err5.err_type);
+    #[test]
+    fn test_lexer_unicode_escape_bmp_character() {
+        let mut lexer = Lexer::new("\"\\u1234\"");
+        let tokens = lexer.tokenize().unwrap();
+
+        assert_eq!(
+            vec![Token {
+                t_type: TokenType::StringLiteral("\u{1234}".to_string()),
+                line: 1,
+                col: 1,
+                index: 0
+            }],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_lexer_unicode_escape_surrogate_pair() {
+        let mut lexer = Lexer::new("\"\\uD83D\\uDE00\"");
+        let tokens = lexer.tokenize().unwrap();
+
+        assert_eq!(
+            vec![Token {
+                t_type: TokenType::StringLiteral("\u{1F600}".to_string()),
+                line: 1,
+                col: 1,
+                index: 0
+            }],
+            tokens
+        );
+    }
+
+    #[test]
+    fn test_lexer_unicode_escape_lone_high_surrogate() {
+        let mut lexer = Lexer::new("\"\\uD800\"");
+        let err = lexer.tokenize().err().unwrap();
+
+        assert_eq!(LexErrorType::BadHexString("d800".to_string()), err.err_type);
     }
 }

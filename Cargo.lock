@@ -163,7 +163,6 @@ dependencies = [
 name = "day002-json"
 version = "0.1.0"
 dependencies = [
- "hex",
  "regex",
 ]
 
